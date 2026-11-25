@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<title>Stickman Fight 3D — GattoHub</title>
+<meta name="description" content="Stickman Fight 3D: duelli stickman con 26 armi, modalità battaglia 1-4 giocatori, survival, boss, minigiochi ed editor di mappe. Un gioco GattoHub.">
+<meta name="theme-color" content="#0b2a5c">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Bungee&display=swap">
+<link rel="stylesheet" href="./style.css?v=33">
+</head>
+<body>
+
+<div id="splash">
+  <div class="in">
+    <img src="./icon-512.png" alt="GattoHub">
+    <p class="nm">GATTOHUB</p>
+    <p class="sb">GattoItaliano</p>
+    <div class="ln"><i></i></div>
+    <p class="sk">tocca per saltare</p>
+  </div>
+</div>
+
+<button id="fs" aria-label="Schermo intero" title="Schermo intero">
+  <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+</button>
+
+<!-- ============ HOME ============ -->
+<section class="screen on" id="scr-home">
+  <div class="home">
+    <div class="hTop">
+      <div class="pWrap">
+        <div class="profile">
+          <div class="avatar">
+            <svg viewBox="0 0 60 100" aria-hidden="true"><g stroke="#4cc9ff" stroke-width="9" stroke-linecap="round" fill="none"><circle cx="30" cy="16" r="11" fill="#4cc9ff" stroke="none"/><path d="M30 29V58M30 58 18 92M30 58 42 92M30 37 14 52M30 37 46 52"/></g></svg>
+          </div>
+          <div class="pInfo">
+            <span class="nm" id="profileName">Giocatore</span>
+            <div class="xpBar"><i id="xpFill"></i></div>
+          </div>
+        </div>
+        <span class="lvlBadge" id="lvlVal">1</span>
+      </div>
+      <div class="logoWrap">
+        <div class="logo">STICKMAN<br><em>FIGHT 3D</em></div>
+      </div>
+      <div class="topRight">
+        <button class="adsBtn" data-nav="ads" aria-label="Guarda un video per 50 monete"><b>+50</b><span>ADS</span></button>
+        <div class="coins"><span class="coinIco">★</span><span id="coinsVal">0</span></div>
+        <button class="gear" id="gearBtn" data-nav="settings" aria-label="Impostazioni">⚙</button>
+      </div>
+    </div>
+
+    <div class="hMid">
+      <div class="mCol">
+        <button class="mbtn" data-nav="shop"><span class="ico">🛒</span>SHOP</button>
+        <button class="mbtn" data-nav="daily"><span class="ico">🎁</span>REGALI</button>
+        <button class="mbtn" data-nav="edit"><span class="ico">✏️</span>EDIT</button>
+      </div>
+      <div class="heroStage">
+        <div class="bestCard"><span class="crown">👑</span><span>BEST</span><b id="bestVal">0</b></div>
+        <svg viewBox="0 0 120 200" aria-hidden="true"><g stroke="currentColor" stroke-width="13" stroke-linecap="round" fill="none"><circle cx="62" cy="34" r="20" fill="currentColor" stroke="none"/><path d="M62 56v52M62 108 38 172M62 108l26 64M62 70 32 108M62 70l34 22"/></g></svg>
+        <svg viewBox="0 0 120 200" aria-hidden="true"><g stroke="currentColor" stroke-width="13" stroke-linecap="round" fill="none"><circle cx="62" cy="34" r="20" fill="currentColor" stroke="none"/><path d="M62 56v52M62 108 38 172M62 108l26 64M62 70 32 96M62 70l34 32"/></g></svg>
+      </div>
+      <div class="mCol right">
+        <button class="mbtn b" data-players="1"><span class="ico">🗡️</span>1 PLAYER</button>
+        <button class="mbtn g" data-players="2"><span class="ico">⚔️</span>2 PLAYER</button>
+        <button class="mbtn y" data-players="3"><span class="ico">🛡️</span>3 PLAYER</button>
+        <button class="mbtn r" data-players="4"><span class="ico">🏹</span>4 PLAYER</button>
+      </div>
+    </div>
+
+    <div class="hBot">
+      <button class="mbtn p battleBig" data-nav="modes"><span class="ico">🎭</span><span class="lbl">BATTLE<br>MODE</span></button>
+      <button class="mbtn b battleBig" data-nav="editor"><span class="ico">🗺️</span><span class="lbl">MAP<br>EDITOR</span></button>
+      <button class="mbtn y battleBig" data-nav="minigames"><span class="ico">⚽</span><span class="lbl">MINI-<br>GAME</span></button>
+      <button class="mbtn r battleBig" data-nav="boss"><span class="ico">💀</span><span class="lbl">BOSS<br>FIGHT</span></button>
+      <button class="mbtn g battleBig" data-nav="survival"><span class="ico">🧟</span><span class="lbl">SURVIVAL</span></button>
+      <button class="mbtn dark battleBig" data-nav="lan"><span class="ico">📶</span><span class="lbl">LAN</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PAGE GENERICA ============ -->
+<section class="screen block" id="scr-page">
+  <div class="pageHead">
+    <button class="back" id="pageBack" aria-label="Indietro">←</button>
+    <h2 id="pageTitle">Titolo</h2>
+    <span class="wallet pill">★ <b id="pageCoins">0</b></span>
+  </div>
+  <div class="pageBody" id="pageBody"></div>
+</section>
+
+<!-- ============ SETUP ============ -->
+<section class="screen" id="scr-setup">
+  <div class="setup">
+    <div class="setupHead">
+      <button class="back" id="setupBack" aria-label="Indietro">←</button>
+      <span class="ttl" id="setupTitle">BATTAGLIA</span>
+      <span class="pill" style="margin-left:auto">★ <b id="setupCoins">0</b></span>
+    </div>
+    <div class="setupMain">
+      <div class="slots" id="setupSlots"></div>
+      <div class="centerCol" id="setupCenter"></div>
+    </div>
+    <div class="setupFoot" id="setupFoot"></div>
+  </div>
+</section>
+
+<!-- ============ EDITOR ============ -->
+<section class="screen block" id="scr-editor">
+  <div class="edWrap">
+    <div class="edTop">
+      <button class="back" id="edBack" aria-label="Indietro">←</button>
+      <span class="ttl">EDITOR MAPPE</span>
+      <span class="edSel">
+        <select id="edLiquid" aria-label="Liquido">
+          <option value="acqua">Acqua</option>
+          <option value="lava">Lava</option>
+          <option value="acido">Acido</option>
+        </select>
+        <select id="edTheme" aria-label="Tema"></select>
+      </span>
+      <button class="btn sm dark" id="edUp" aria-label="Scorri su">▲</button>
+      <button class="btn sm dark" id="edDown" aria-label="Scorri giù">▼</button>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn sm dark" id="edNew">Nuova</button>
+      <button class="btn sm dark" id="edLoad">Carica</button>
+      <button class="btn sm green" id="edSave">Salva</button>
+      <button class="btn sm gold" id="edPlay">Gioca ▶</button>
+    </div>
+    <div class="edCanvasWrap"><canvas id="edCanvas" width="960" height="540"></canvas></div>
+    <div class="edTools" id="edTools"></div>
+  </div>
+</section>
+
+<!-- ============ GIOCO ============ -->
+<section class="screen" id="scr-game">
+  <div class="stage"><canvas id="c" width="960" height="540" aria-label="Arena di combattimento"></canvas></div>
+  <div class="topBtns">
+    <button class="gbtn" id="pauseBtn" aria-label="Pausa">⏸</button>
+  </div>
+  <div id="touchLayer"></div>
+
+  <div class="overlay" id="pauseOverlay">
+    <div class="modal">
+      <h2>PAUSA</h2>
+      <p id="pauseInfo">Comandi: joystick per muoverti, ⚔ per attaccare, ✦ per l'abilità. Rilascia il joystick per usare l'abilità.</p>
+      <button class="btn gold" id="btnResume">RIPRENDI</button>
+      <button class="btn dark" id="btnRestart">RICOMINCIA</button>
+      <button class="btn red" id="btnQuit">ESCI AL MENU</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="endOverlay">
+    <div class="modal" id="endBox"></div>
+  </div>
+</section>
+
+<script src="./data.js?v=33"></script>
+<script src="./audio.js?v=33"></script>
+<script src="./net.js?v=33"></script>
+<script src="./engine.js?v=33"></script>
+<script src="./editor.js?v=33"></script>
+<script src="./ui.js?v=33"></script>
+</body>
+</html>
