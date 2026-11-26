@@ -200,13 +200,20 @@
     if (!noHp && o.hp <= 0) kill(o, src);
   }
 
+  // fa cadere un'arma a terra: è un oggetto fisico 2D che cade, rimbalza e gira
+  function addPickup(id, x, y, vy, noPickT) {
+    if (!WP[id] || id === 'fist') return;
+    pickups.push({
+      id: id, x: clamp(x, 40, worldW - 40), y: y,
+      vy: vy == null ? -220 : vy, rot: rnd(-.5, .5), vrot: rnd(-7, 7),
+      bounce: 0, pickT: noPickT || 0, landed: false, dead: false
+    });
+  }
+
   // l'arma del caduto resta a terra come bottino per chi è ancora in piedi
   function dropWeapon(o) {
     if (!o || !WP[o.weapon] || o.weapon === 'fist') return;
-    pickups.push({
-      id: o.weapon, x: clamp(o.x, 60, worldW - 60), y: o.y - 56 * o.s,
-      vy: -300, spin: rnd(0, 6), landed: false, dead: false
-    });
+    addPickup(o.weapon, o.x, o.y - 56 * o.s, -300);
     o.weapon = 'fist'; o.alt = 'fist'; o.atkT = -1; o.hitSet = null;
   }
 
@@ -515,7 +522,7 @@
 
   function spawnPickup() {
     const pool = G.WLIST.filter(id => id !== 'fist');
-    pickups.push({ id: pick(pool), x: rnd(140, worldW - 140), y: -40, vy: 80, landed: false, spin: rnd(0, 6), dead: false });
+    addPickup(pick(pool), rnd(140, worldW - 140), -40, 80);
   }
 
   function updatePickups(dt) {
@@ -525,22 +532,35 @@
       if (pickupT <= 0) { pickupT = 10; spawnPickup(); }
     }
     for (const pk of pickups) {
-      pk.spin += dt * 2;
+      if (pk.pickT > 0) pk.pickT -= dt;
+      pk.rot = (pk.rot || 0) + (pk.vrot || 0) * dt;
       if (!pk.landed) {
         pk.vy += 520 * dt;
         pk.y += pk.vy * dt;
         for (const p of plats) {
           if (pk.x > p.x && pk.x < p.x + p.w && pk.y > p.y - 6 && pk.y < p.y + 30 && pk.vy > 0) {
-            pk.y = p.y - 4; pk.landed = true; pk.vy = 0;
-            burst(pk.x, pk.y, 8, WP[pk.id].col, 160);
+            if (pk.vy > 240 && (pk.bounce || 0) < 2) {
+              // rimbalza come un oggetto vero prima di fermarsi
+              pk.bounce = (pk.bounce || 0) + 1;
+              pk.y = p.y - 6; pk.vy = -pk.vy * .42; pk.vrot *= .7;
+              burst(pk.x, pk.y, 5, WP[pk.id].col, 120);
+            } else {
+              pk.y = p.y - 4; pk.vy = 0; pk.landed = true; pk.vrot = 0;
+              pk.rot = Math.round(pk.rot / Math.PI) * Math.PI + rnd(-.08, .08);
+              burst(pk.x, pk.y, 8, WP[pk.id].col, 160);
+            }
             break;
           }
         }
         if (pk.y > LIQUID + 30) pk.dead = true;
       }
+      if (pk.pickT > 0) continue;
       for (const f of F) {
         if (f.dead) continue;
         if (Math.hypot(f.x - pk.x, (f.y - 46 * f.s) - pk.y) < 44) {
+          if (f.weapon === pk.id) continue;
+          // ho già un'arma in mano: la lascio a terra e la può prendere chiunque
+          if (WP[f.weapon] && f.weapon !== 'fist') addPickup(f.weapon, f.x - f.face * 46, f.y - 52 * f.s, -240, .8);
           f.weapon = pk.id; f.alt = 'fist';
           f.atkT = -1; f.cd = Math.max(f.cd, .18);
           floatText(f.x, f.y - 84 * f.s, WP[pk.id].n, '#ffd24a');
@@ -594,8 +614,9 @@
       let bl = 1e9;
       for (const pk of pickups) {
         const w2 = WP[pk.id];
-        if (!w2) continue;
-        if (f.weapon !== 'fist' && w2.dmg < myDmg + 1) continue;
+        if (!w2 || pk.id === f.weapon) continue;
+        // con un'arma in mano la cambia solo se è più forte (niente scambi a vuoto)
+        if (f.weapon !== 'fist' && w2.dmg <= myDmg) continue;
         const dd = Math.hypot(pk.x - f.x, (pk.y - f.y) * 1.3);
         if (dd < bl) { bl = dd; loot = pk; }
       }
@@ -974,6 +995,8 @@
       if (MODS().boots && f.weapon !== 'boots') { f.weapon = 'boots'; }
       if (MODS().nohealth) f.hp = f.maxhp = 9999;
       if (skyW) { f.weapon = 'fist'; f.alt = 'fist'; }
+      // arma di partenza: in modalità normale torna in mano a ogni round
+      f.roundWeapon = f.weapon; f.roundAlt = f.alt;
     }
     // slot input
     const C = cfg.controls || {};
@@ -1088,6 +1111,8 @@
       f.face = f.x > W / 2 ? -1 : 1; f.shield = 0; f.block = false;
       f.ground = false; f.trail = [];
       if (skyW) { f.weapon = 'fist'; f.alt = 'fist'; }
+      // l'arma del round precedente è caduta a terra: qui si riparte con la propria
+      else if (f.roundWeapon && !MODS().mirror) { f.weapon = f.roundWeapon; f.alt = f.roundAlt || f.alt; }
       if (MODS().mirror && F[0]) f.weapon = F[0].weapon;
       if (MODS().nohealth) f.hp = f.maxhp = 9999;
     });
@@ -1900,23 +1925,22 @@
     }
   }
 
+  // le armi a terra sono disegnate come oggetti 2D veri, non come carte con l'icona
   function drawPickups() {
     for (const pk of pickups) {
-      const bob = pk.landed ? Math.sin(gameT * 3 + pk.spin) * 3 : 0;
       const w = WP[pk.id];
+      if (!w) continue;
+      const bob = pk.landed ? Math.sin(gameT * 3 + pk.x * .02) * 1.5 : 0;
+      if (pk.landed) {
+        g.fillStyle = 'rgba(0,0,0,.3)';
+        g.beginPath(); g.ellipse(pk.x, pk.y + 4, 24, 6, 0, 0, TAU); g.fill();
+      }
       g.save();
-      g.translate(pk.x, pk.y + bob - 14);
-      g.fillStyle = 'rgba(0,0,0,.3)';
-      g.beginPath(); g.ellipse(0, 24, 26, 6, 0, 0, TAU); g.fill();
-      g.shadowColor = w.col; g.shadowBlur = 18;
-      g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 2;
-      rr(-30, -20, 60, 40, 9); g.fillStyle = 'rgba(8,20,38,.75)'; g.fill(); g.stroke();
-      const ico = weaponIconEl(pk.id);
-      g.shadowBlur = 0;
-      g.drawImage(ico, -26, -16, 52, 32);
+      g.translate(pk.x, pk.y + bob - 12);
+      g.rotate(pk.rot || 0);
+      g.shadowColor = w.col; g.shadowBlur = 12;
+      drawWeapon({ weapon: pk.id, s: 1, giant: false, color2: '#ffffff', dead: false }, { x: 0, y: 0 }, 1, 0);
       g.restore();
-      g.fillStyle = '#fff'; g.font = '700 10px Baloo 2, sans-serif'; g.textAlign = 'center';
-      g.fillText(w.n, pk.x, pk.y + 26);
     }
   }
 

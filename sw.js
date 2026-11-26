@@ -1,5 +1,5 @@
 /* Stickman Fight 3D — service worker: rete prima, copia in cache per l'offline. */
-const CACHE = 'stickman-fight-3d-v6';
+const CACHE = 'stickman-fight-3d-v7';
 const scope = self.registration.scope;
 const url = (p) => new URL(p, scope).href;
 const SHELL = [
