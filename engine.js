@@ -30,16 +30,15 @@
   let uiP = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0, pos: {} };
 
   // posizioni libere dei comandi (percentuali dello schermo), salvate nel profilo
+  const pct = v => Math.max(0, Math.min(100, Number(v)));
   function applyFreePos(root) {
-    const map = { stick: '.stick', atk: '.ab.atk', abi: '.ab.abi', drop: '.ab.drop', jmp: '.ab.jmp' };
-    Object.keys(map).forEach(k => {
-      const p = uiP.pos && uiP.pos[k];
-      if (!p) return;
-      const node = root.querySelector(map[k]);
-      if (!node) return;
-      node.classList.add('freePos');
-      node.style.left = p.x + '%';
-      node.style.top = p.y + '%';
+    const pos = uiP.pos || {};
+    root.querySelectorAll('[data-seat]').forEach(n => {
+      const p = pos[n.dataset.seat];
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+      n.classList.add('freePos');
+      n.style.left = pct(p.x) + '%';
+      n.style.top = pct(p.y) + '%';
     });
   }
 
@@ -1334,12 +1333,12 @@
       el.dataset.slot = i;
       el.style.setProperty('--c', f.color);
       el.      innerHTML =
-        '<div class="stick"><div class="ring"></div><div class="knob"></div></div>' +
+        '<div class="stick" data-seat="stick"><div class="ring"></div><div class="knob"></div></div>' +
         '<div class="acts">' +
-        '<button class="ab atk" aria-label="Attacco">⚔</button>' +
-        '<button class="ab abi" aria-label="Abilità">✦<span class="cd"></span></button>' +
-        '<button class="ab drop" aria-label="Lascia l\'arma">⤓</button>' +
-        (uiP.jump ? '<button class="ab jmp" aria-label="Salto">↑</button>' : '') +
+        '<button class="ab atk" data-seat="atk" aria-label="Attacco">⚔</button>' +
+        '<button class="ab abi" data-seat="abi" aria-label="Abilità">✦<span class="cd"></span></button>' +
+        '<button class="ab drop" data-seat="drop" aria-label="Lascia l\'arma">⤓</button>' +
+        (uiP.jump ? '<button class="ab jmp" data-seat="jmp" aria-label="Salto">↑</button>' : '') +
         '</div>';
       tLayer.appendChild(el);
       applyFreePos(el);

@@ -25,7 +25,7 @@
     ads: null
   };
   const DEF_ADS = { net: 'monetag', tag: '', lang: 'auto' };
-  const DEF_TOUCH = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0 };
+  const DEF_TOUCH = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0, pos: {} };
   const DEFAULT_CTRL = {
     p1: { l: 'KeyA', r: 'KeyD', j: 'KeyW', d: 'KeyS', a: 'KeyF', abi: 'KeyE', sw: 'KeyR' },
     p2: { l: 'ArrowLeft', r: 'ArrowRight', j: 'ArrowUp', d: 'ArrowDown', a: 'KeyL', abi: 'KeyK', sw: 'KeyJ' }
@@ -49,6 +49,7 @@
       if (raw.sfx == null) { p.sfx = raw.sound !== false; dirty = true; }
       p.sound = p.music || p.sfx;
       p.touch = Object.assign({}, DEF_TOUCH, p.touch || {});
+      p.touch.pos = Object.assign({}, p.touch.pos || {});
       p.ads = Object.assign({}, DEF_ADS, p.ads || {});
       // tag pubblicato nel gioco (ads-config.js): vale per tutti, chi gioca non deve fare nulla
       const GADS = window.SF3D_ADS;
@@ -811,15 +812,12 @@
       cardT.appendChild(tRow);
       const resetTouch = el('button', 'btn red', '↺ COMANDI DI DEFAULT');
       resetTouch.onclick = () => {
-        P.touch = Object.assign({}, DEF_TOUCH);
+        P.touch = Object.assign({}, DEF_TOUCH, { pos: {} });
         applyTouch(); G.audio.sfx('click'); pageSettings();
       };
       cardT.appendChild(resetTouch);
       const posReset = el('button', 'btn dark', '↺ POSIZIONI DEI PULSANTI');
-      posReset.onclick = () => {
-        P.touch.pos = {}; saveProfile(); G.engine.setUiPrefs(P.touch);
-        G.audio.sfx('click'); toast('Pulsanti tornati al posto di partenza');
-      };
+      posReset.onclick = () => { resetCtrlPos(); toast('Pulsanti tornati al posto di partenza'); };
       cardT.appendChild(posReset);
       cardT.appendChild(el('p', 'hint', 'Per spostare i singoli pulsanti (levetta, ⚔, ✦, ⤓, ↑) uno per uno: durante una partita apri la pausa e tocca ✥ SPOSTA COMANDI. Trascini ogni comando col dito: la posizione resta salvata sul dispositivo.'));
       body.appendChild(cardT);
@@ -1699,34 +1697,55 @@
 
   /* --- spostare i comandi col dito, uno per uno --- */
   let ctrlEdit = null;
+  const r2 = v => Math.round(v * 100) / 100;
+
+  // centro di un comando in percentuale dello schermo
+  function seatCenter(n) {
+    const b = n.getBoundingClientRect();
+    return {
+      x: ((b.left + b.width / 2) / window.innerWidth) * 100,
+      y: ((b.top + b.height / 2) / window.innerHeight) * 100,
+      hw: (b.width / 2 / window.innerWidth) * 100,
+      hh: (b.height / 2 / window.innerHeight) * 100
+    };
+  }
 
   function startCtrlEdit() {
-    const layer = document.getElementById('touchLayer');
-    if (!layer || ctrlEdit) return;
-    const pauseOv = $('#pauseOverlay');
+    const layer = $('#touchLayer');
+    if (ctrlEdit || !layer || !layer.querySelector('[data-seat]')) return;
+    let drag = null;
+
+    // tiene il comando intero dentro lo schermo
+    const place = (node, x, y) => {
+      const { hw, hh } = seatCenter(node);
+      node.classList.add('freePos');
+      node.style.left = Math.min(100 - hw, Math.max(hw, x)) + '%';
+      node.style.top = Math.min(100 - hh, Math.max(hh, y)) + '%';
+    };
     const down = ev => {
-      const node = ev.target.closest('.stick, .ab');
+      const node = drag ? null : ev.target.closest('[data-seat]');
       if (!node) return;
       ev.preventDefault(); ev.stopPropagation();
-      const r = node.getBoundingClientRect();
-      const ox = ev.clientX - (r.left + r.width / 2);
-      const oy = ev.clientY - (r.top + r.height / 2);
-      const move = e2 => {
-        const x = (e2.clientX - ox) / window.innerWidth * 100;
-        const y = (e2.clientY - oy) / window.innerHeight * 100;
-        node.classList.add('freePos');
-        node.style.left = Math.max(4, Math.min(96, x)) + '%';
-        node.style.top = Math.max(4, Math.min(96, y)) + '%';
+      const c = seatCenter(node);
+      drag = {
+        node, id: ev.pointerId,
+        dx: (ev.clientX / window.innerWidth) * 100 - c.x,
+        dy: (ev.clientY / window.innerHeight) * 100 - c.y
       };
-      move(ev);
-      const up = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        G.audio.sfx('click');
-      };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
     };
+    const move = ev => {
+      if (!drag || ev.pointerId !== drag.id) return;
+      ev.preventDefault();
+      place(drag.node,
+        (ev.clientX / window.innerWidth) * 100 - drag.dx,
+        (ev.clientY / window.innerHeight) * 100 - drag.dy);
+    };
+    const up = ev => {
+      if (!drag || ev.pointerId !== drag.id) return;
+      drag = null;
+      G.audio.sfx('click');
+    };
+
     const bar = el('div', 'ctrlEditBar');
     const done = el('button', 'btn gold', 'FINE');
     const reset = el('button', 'btn dark', '↺ DEFAULT');
@@ -1734,34 +1753,35 @@
     bar.appendChild(done);
     bar.appendChild(reset);
     document.body.appendChild(bar);
-    if (pauseOv) pauseOv.classList.remove('on');
+    ctrlEdit = { layer, bar, down, move, up };
     layer.classList.add('editing');
     layer.addEventListener('pointerdown', down, true);
-    ctrlEdit = { layer, bar, down };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    $('#pauseOverlay').classList.remove('on');
     done.onclick = () => { saveCtrlPos(); stopCtrlEdit(); };
-    reset.onclick = () => {
-      layer.querySelectorAll('.freePos').forEach(n => {
-        n.classList.remove('freePos'); n.style.left = ''; n.style.top = '';
-      });
-      G.audio.sfx('click');
-    };
+    reset.onclick = () => { drag = null; resetCtrlPos(); };
     G.audio.sfx('buy');
     toast('Trascina i comandi, poi FINE');
   }
 
+  function resetCtrlPos() {
+    P.touch.pos = {};
+    saveProfile();
+    G.engine.setUiPrefs(P.touch);   // ricostruisce i comandi nella posizione di partenza
+  }
+
+  // salva dove sono i comandi: chi c'è sullo schermo vale così com'è, chi manca (es. salto spento) tiene la sua posizione
   function saveCtrlPos() {
-    const layer = document.getElementById('touchLayer');
+    const layer = $('#touchLayer');
     if (!layer) return;
-    const map = { stick: '.stick', atk: '.ab.atk', abi: '.ab.abi', drop: '.ab.drop', jmp: '.ab.jmp' };
-    const pos = {};
-    Object.keys(map).forEach(k => {
-      const n = layer.querySelector(map[k]);
-      if (!n || !n.classList.contains('freePos')) return;
-      const r = n.getBoundingClientRect();
-      pos[k] = {
-        x: +(((r.left + r.width / 2) / window.innerWidth) * 100).toFixed(2),
-        y: +(((r.top + r.height / 2) / window.innerHeight) * 100).toFixed(2)
-      };
+    const pos = Object.assign({}, P.touch.pos);
+    layer.querySelectorAll('[data-seat]').forEach(n => {
+      const k = n.dataset.seat;
+      if (!n.classList.contains('freePos')) { delete pos[k]; return; }
+      const c = seatCenter(n);
+      pos[k] = { x: r2(c.x), y: r2(c.y) };
     });
     P.touch.pos = pos;
     saveProfile();
@@ -1770,13 +1790,15 @@
 
   function stopCtrlEdit() {
     if (!ctrlEdit) return;
-    ctrlEdit.layer.removeEventListener('pointerdown', ctrlEdit.down, true);
-    ctrlEdit.layer.classList.remove('editing');
-    ctrlEdit.bar.remove();
+    const { layer, bar, down, move, up } = ctrlEdit;
     ctrlEdit = null;
-    const pauseOv = $('#pauseOverlay');
-    if (pauseOv && G.engine.isPlaying()) pauseOv.classList.add('on');
-    G.audio.sfx('click');
+    layer.removeEventListener('pointerdown', down, true);
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', up);
+    layer.classList.remove('editing');
+    bar.remove();
+    if (G.engine.isPlaying() && G.engine.isPaused()) $('#pauseOverlay').classList.add('on');
   }
 
   /* ---------------- init ---------------- */
