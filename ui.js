@@ -50,6 +50,12 @@
       p.sound = p.music || p.sfx;
       p.touch = Object.assign({}, DEF_TOUCH, p.touch || {});
       p.ads = Object.assign({}, DEF_ADS, p.ads || {});
+      // tag pubblicato nel gioco (ads-config.js): vale per tutti, chi gioca non deve fare nulla
+      const GADS = window.SF3D_ADS;
+      if (GADS && GADS.tag) {
+        if (p.ads.tag !== String(GADS.tag)) { p.ads.tag = String(GADS.tag); dirty = true; }
+        if (!raw.ads || !raw.ads.lang) { p.ads.lang = GADS.lang || 'auto'; }
+      }
       if (!p.ads.tag && p.ads.zone) { p.ads.tag = String(p.ads.zone); dirty = true; }
       if (p.ads.net && p.ads.net !== 'monetag') { p.ads.net = 'monetag'; dirty = true; }
       p.controls = Object.assign({}, DEFAULT_CTRL, p.controls || {});

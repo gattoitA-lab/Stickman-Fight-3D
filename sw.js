@@ -4,7 +4,7 @@ const scope = self.registration.scope;
 const url = (p) => new URL(p, scope).href;
 const SHELL = [
   './', './index.html', './style.css',
-  './data.js', './audio.js', './net.js', './engine.js', './editor.js', './ui.js',
+  './data.js', './audio.js', './net.js', './engine.js', './editor.js', './ads-config.js', './ui.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'
 ];
 
