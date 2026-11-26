@@ -21,8 +21,10 @@
     skin: null, variants: [], bossTier: 0, bestWave: 0,
     lastDaily: '', streak: 0, sound: true, music: true, sfx: true,
     adDay: '', adCount: 0,
-    skyWeapons: false, controls: null, touch: null
+    skyWeapons: false, controls: null, touch: null,
+    ads: null
   };
+  const DEF_ADS = { net: 'none', zone: '', fn: '' };
   const DEF_TOUCH = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0 };
   const DEFAULT_CTRL = {
     p1: { l: 'KeyA', r: 'KeyD', j: 'KeyW', d: 'KeyS', a: 'KeyF', abi: 'KeyE', sw: 'KeyR' },
@@ -47,6 +49,7 @@
       if (raw.sfx == null) { p.sfx = raw.sound !== false; dirty = true; }
       p.sound = p.music || p.sfx;
       p.touch = Object.assign({}, DEF_TOUCH, p.touch || {});
+      p.ads = Object.assign({}, DEF_ADS, p.ads || {});
       p.controls = Object.assign({}, DEFAULT_CTRL, p.controls || {});
       p.controls.p1 = Object.assign({}, DEFAULT_CTRL.p1, p.controls.p1 || {});
       p.controls.p2 = Object.assign({}, DEFAULT_CTRL.p2, p.controls.p2 || {});
@@ -275,6 +278,88 @@
     if (ov) ov.remove();
   }
 
+  /* --- pubblicità vera: rete esterna (es. Monetag) configurata nelle impostazioni --- */
+  let adSdkKey = '';
+
+  function adsReal() {
+    const a = P.ads || {};
+    return a.net && a.net !== 'none' && (String(a.zone || '').trim() || String(a.fn || '').trim());
+  }
+
+  function loadAdSdk(net, zone) {
+    return new Promise((resolve, reject) => {
+      const key = net + ':' + zone;
+      if (adSdkKey === key || (zone && typeof window['show_' + zone] === 'function')) return resolve();
+      if (net !== 'monetag') return reject(new Error('rete non supportata'));
+      const s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://libtl.com/sdk.js';
+      s.setAttribute('data-zone', zone);
+      s.setAttribute('data-sdk', 'show_' + zone);
+      s.onload = () => { adSdkKey = key; resolve(); };
+      s.onerror = () => reject(new Error('SDK annunci non raggiungibile'));
+      document.head.appendChild(s);
+    });
+  }
+
+  // resolve solo se l'annuncio è stato visto (e, se la rete lo dice, premiato)
+  function realRewarded() {
+    const a = P.ads || {};
+    const zone = String(a.zone || '').trim();
+    const fn = String(a.fn || '').trim() || ('show_' + zone);
+    if (!zone && !String(a.fn || '').trim()) return Promise.reject(new Error('manca l\'ID zona'));
+    return loadAdSdk(a.net, zone).then(() => new Promise((resolve, reject) => {
+      const f = window[fn];
+      if (typeof f !== 'function') return reject(new Error('funzione ' + fn + ' non trovata'));
+      let done = false;
+      const stop = (ok, e) => { if (done) return; done = true; ok ? resolve() : reject(e); };
+      try {
+        const r = f();
+        if (r && typeof r.then === 'function') {
+          r.then(res => {
+            const t = res && res.reward_event_type;
+            if (!t || t === 'valued') stop(true);
+            else stop(false, new Error('annuncio non premiato'));
+          }).catch(e => stop(false, e));
+        } else stop(true);
+      } catch (e) { stop(false, e); }
+      setTimeout(() => stop(false, new Error('timeout annuncio')), 45000);
+    }));
+  }
+
+  function adWaitOverlay(text) {
+    closeAdOverlay();
+    const ov = el('div', 'adOverlay');
+    ov.id = 'adOverlay';
+    ov.innerHTML =
+      '<div class="adBox" style="--c1:#123a63;--c2:#4cc9ff">' +
+        '<div class="adBadge">PUBBLICITÀ</div>' +
+        '<div class="adScene">' +
+          '<span class="adIco">⏳</span>' +
+          '<b class="adBrand">' + text + '</b>' +
+          '<span class="adTag">Attendi qualche secondo…</span>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    return ov;
+  }
+
+  function playRealAd(onDone) {
+    adWaitOverlay('Carico l\'annuncio');
+    realRewarded().then(() => {
+      takeAd();
+      P.coins += 50; saveProfile(); renderHUD();
+      G.audio.sfx('coin');
+      closeAdOverlay();
+      toast('+50 monete ★');
+      if (onDone) onDone();
+    }).catch(err => {
+      closeAdOverlay();
+      G.audio.sfx('error');
+      toast('Annuncio non disponibile: ' + ((err && err.message) || 'riprova'));
+    });
+  }
+
   function playAd(country, ad, onDone) {
     closeAdOverlay();
     const ov = el('div', 'adOverlay');
@@ -325,7 +410,9 @@
       const btn = el('button', 'btn gold');
       card.appendChild(pips); card.appendChild(btn); card.appendChild(note);
       body.appendChild(card);
-      body.appendChild(el('p', 'hint', 'Le pubblicità sono simulate dal gioco e cambiano in base alla lingua del dispositivo. Le monete sono salvate su questo dispositivo.'));
+      body.appendChild(el('p', 'hint', adsReal()
+        ? 'Annunci reali attivi (' + (P.ads.net === 'monetag' ? 'Monetag' : P.ads.net) + '): il premio arriva solo dopo aver visto il video.'
+        : 'Pubblicità simulata: per mostrare annunci veri collega la rete in Impostazioni → ANNUNCI.'));
 
       const draw = () => {
         const left = adsLeft();
@@ -350,6 +437,7 @@
       btn.onclick = () => {
         if (adsLeft() <= 0) { G.audio.sfx('error'); toast('Torna domani per altri video'); return; }
         G.audio.sfx('click');
+        if (adsReal()) { playRealAd(draw); return; }
         const pool = AD_CATALOG[country] || AD_CATALOG.EN;
         const ad = pool[Math.floor(Math.random() * pool.length)];
         playAd(country, ad, draw);
@@ -552,6 +640,51 @@
       };
       card3.appendChild(ctrlReset);
       body.appendChild(card3);
+
+      const cardA = el('div', 'card');
+      cardA.innerHTML = '<h3>ANNUNCI (+50)</h3><p class="hint">Per mostrare pubblicità vere serve una rete che approva il sito. Passi: crea un account publisher (per esempio <b>Monetag</b>), aggiungi e verifica il dominio del gioco, crea una zona <b>Rewarded Interstitial</b> e incolla qui l\'ID zona. Finché non è configurata resta la pubblicità simulata.</p>';
+      const netRow = el('div', 'row');
+      const netB = el('button', 'btn dark', '');
+      const paintNet = () => {
+        netB.className = 'btn ' + (P.ads.net === 'monetag' ? 'green' : 'dark');
+        netB.textContent = P.ads.net === 'monetag' ? 'RETE: MONETAG' : 'RETE: NESSUNA (simulata)';
+      };
+      netB.onclick = () => { P.ads.net = P.ads.net === 'monetag' ? 'none' : 'monetag'; paintNet(); G.audio.sfx('click'); };
+      paintNet();
+      netRow.appendChild(netB);
+
+      const zoneIn = el('input', 'nameInput');
+      zoneIn.type = 'text'; zoneIn.maxLength = 24; zoneIn.value = P.ads.zone || '';
+      zoneIn.placeholder = 'ID zona annuncio'; zoneIn.setAttribute('aria-label', 'ID zona annuncio');
+      const fnIn = el('input', 'nameInput');
+      fnIn.type = 'text'; fnIn.maxLength = 40; fnIn.value = P.ads.fn || '';
+      fnIn.placeholder = 'funzione JS (opzionale)'; fnIn.setAttribute('aria-label', 'Funzione annuncio');
+      const stat = el('p', 'hint', '');
+      const paintStat = () => {
+        stat.textContent = adsReal()
+          ? 'Configurato: ' + P.ads.net + (P.ads.zone ? ' · zona ' + P.ads.zone : '') + (P.ads.fn ? ' · funzione ' + P.ads.fn : '')
+          : 'Annunci simulati: nessuna rete collegata.';
+      };
+      const saveA = el('button', 'btn gold', 'SALVA ANNUNCI');
+      saveA.onclick = () => {
+        P.ads.zone = zoneIn.value.trim(); P.ads.fn = fnIn.value.trim();
+        saveProfile(); paintStat(); paintNet(); G.audio.sfx('click');
+        toast(adsReal() ? 'Annunci reali impostati' : 'Annunci simulati');
+      };
+      const testA = el('button', 'btn dark', 'PROVA');
+      testA.onclick = () => {
+        if (!adsReal()) { toast('Prima configura rete e ID zona'); return; }
+        adWaitOverlay('Provo l\'annuncio');
+        realRewarded().then(() => { closeAdOverlay(); toast('Annuncio caricato e chiuso'); })
+          .catch(e => { closeAdOverlay(); toast('Errore: ' + ((e && e.message) || e)); });
+      };
+      const aRow = el('div', 'row');
+      aRow.appendChild(zoneIn); aRow.appendChild(fnIn);
+      const aRow2 = el('div', 'row');
+      aRow2.appendChild(saveA); aRow2.appendChild(testA);
+      cardA.appendChild(netRow); cardA.appendChild(aRow); cardA.appendChild(aRow2); cardA.appendChild(stat);
+      paintStat();
+      body.appendChild(cardA);
 
       const cardT = el('div', 'card');
       cardT.innerHTML = '<h3>COMANDI SULLO SCHERMO</h3><p class="hint">Dimensione, altezza, lato, salto e cosa fa il rilascio della levetta. Le modifiche valgono subito, anche a partita in corso.</p>';
