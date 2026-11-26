@@ -6,6 +6,6 @@
      tag: 'https://otieu.com/4/1234567'
    Con tag vuoto il gioco mostra gli annunci di prova. */
 window.SF3D_ADS = {
-  tag: '',
+  tag: 'https://uplcm.com/4/12358765',
   lang: 'auto'
 };
