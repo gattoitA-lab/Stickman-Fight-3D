@@ -20,7 +20,7 @@
     heads: ['none'], head: 'none', bg: '', bgs: [],
     skin: null, variants: [], bossTier: 0, bestWave: 0,
     lastDaily: '', streak: 0, sound: true, music: true, sfx: true,
-    adDay: '', adCount: 0,
+    adDay: '', adCount: 0, adPending: 0,
     skyWeapons: false, controls: null, touch: null,
     ads: null
   };
@@ -333,6 +333,7 @@
   }
 
   function grantReward(onDone) {
+    P.adPending = 0;
     takeAd();
     P.coins += 50; saveProfile(); renderHUD();
     G.audio.sfx('coin');
@@ -395,6 +396,8 @@
       const openB = el('a', 'btn gold', 'APRI L\'ANNUNCIO ↗');
       openB.href = t.url; openB.target = '_blank'; openB.rel = 'noopener';
       openB.style.textAlign = 'center';
+      // segno l'apertura: se il telefono chiude la pagina, al ritorno il premio arriva lo stesso
+      openB.addEventListener('click', () => { P.adPending = Date.now(); saveProfile(); });
       const done = el('button', 'btn dark', 'ASPETTA 5s…');
       done.disabled = true;
       let awarded = false;
@@ -1673,6 +1676,20 @@
     $('#endHome').onclick = () => { stopNet(); G.engine.quit(); home(); };
   }
 
+  // premio rimasto in sospeso: il gioco è stato chiuso/ricaricato mentre l'annuncio era aperto
+  function settlePendingAd() {
+    if (!P.adPending) return;
+    const dt = Date.now() - P.adPending;
+    P.adPending = 0;
+    if (dt < 5000) { saveProfile(); return; }
+    takeAd();
+    P.coins += 50;
+    saveProfile();
+    renderHUD();
+    G.audio.sfx('coin');
+    toast('+50 monete ★ annuncio completato');
+  }
+
   /* ---------------- init ---------------- */
   function init() {
     G.engine.init({ canvas: $('#c'), touch: $('#touchLayer') });
@@ -1692,6 +1709,7 @@
 
     G.engine.setUiPrefs(P.touch);
     renderHUD();
+    settlePendingAd();
     G.audio.setMusic(P.music);
     G.audio.setSfx(P.sfx);
     G.audio.setEnabled(P.sound);
