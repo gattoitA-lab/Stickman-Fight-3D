@@ -203,27 +203,35 @@ body.gaming #fs{opacity:.35}
 #c{width:min(100vw,calc(100dvh * 16 / 9));height:auto;max-height:100dvh;display:block;touch-action:none}
 .topBtns{position:absolute;z-index:12;top:calc(6px + env(safe-area-inset-top));left:calc(6px + env(safe-area-inset-left));display:flex;gap:6px}
 .gbtn{width:38px;height:38px;border-radius:11px;background:rgba(6,16,32,.78);border:2px solid #2a4a7a;display:grid;place-items:center;font-size:16px;color:#dce8ff;backdrop-filter:blur(4px)}
-#touchLayer{position:absolute;inset:0;z-index:10;pointer-events:none}
+#touchLayer{position:absolute;inset:0;z-index:10;pointer-events:none;--sz:1;--lift:0px}
 .ctrl{position:absolute;display:flex;align-items:flex-end;gap:6px;pointer-events:none}
-.ctrl .stick{width:clamp(76px,15vmin,116px);height:clamp(76px,15vmin,116px);border-radius:50%;background:rgba(255,255,255,.07);border:3px solid rgba(255,255,255,.32);position:relative;pointer-events:auto;touch-action:none;backdrop-filter:blur(2px)}
+.ctrl .stick{width:calc(clamp(76px,15vmin,116px) * var(--sz,1));height:calc(clamp(76px,15vmin,116px) * var(--sz,1));border-radius:50%;background:rgba(255,255,255,.07);border:3px solid rgba(255,255,255,.32);position:relative;pointer-events:auto;touch-action:none;backdrop-filter:blur(2px)}
 .ctrl .stick .ring{position:absolute;inset:6px;border-radius:50%;border:2px dashed rgba(255,255,255,.18)}
 .ctrl .knob{position:absolute;left:50%;top:50%;width:44%;height:44%;border-radius:50%;transform:translate(-50%,-50%);background:var(--c,#4cc9ff);border:3px solid rgba(0,0,0,.45);box-shadow:0 3px 8px rgba(0,0,0,.4),inset 0 -4px 8px rgba(0,0,0,.25)}
 .ctrl .acts{display:flex;flex-direction:column;gap:6px;pointer-events:none}
-.ctrl .ab{pointer-events:auto;width:clamp(44px,8.4vmin,62px);height:clamp(44px,8.4vmin,62px);border-radius:50%;border:3px solid rgba(0,0,0,.5);background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:clamp(16px,3.4vmin,24px);touch-action:none;color:#fff;text-shadow:0 2px 3px rgba(0,0,0,.5)}
+.ctrl .ab{pointer-events:auto;width:calc(clamp(44px,8.4vmin,62px) * var(--sz,1));height:calc(clamp(44px,8.4vmin,62px) * var(--sz,1));border-radius:50%;border:3px solid rgba(0,0,0,.5);background:rgba(255,255,255,.16);display:grid;place-items:center;font-size:calc(clamp(16px,3.4vmin,24px) * var(--sz,1));touch-action:none;color:#fff;text-shadow:0 2px 3px rgba(0,0,0,.5)}
 .ctrl .ab.atk{background:var(--c,#ff6a57)}
 .ctrl .ab.abi{background:rgba(20,40,70,.8);border-color:rgba(255,255,255,.35);position:relative;overflow:hidden}
 .ctrl .ab.abi .cd{position:absolute;inset:0;background:rgba(0,0,0,.55);transform-origin:bottom;transform:scaleY(0)}
 .ctrl .ab.drop{background:rgba(255,196,66,.9);color:#231704;border-color:rgba(0,0,0,.55);font-weight:800}
 .ctrl .ab.drop:active{filter:brightness(1.1)}
 .ctrl .ab:active{filter:brightness(1.25)}
-.ctrl[data-slot="0"]{left:calc(8px + env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom))}
-#touchLayer.solo .ctrl[data-slot="0"] .acts{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));flex-direction:row;align-items:flex-end;gap:10px;pointer-events:none}
-#touchLayer.solo .ctrl[data-slot="0"] .ab{width:clamp(56px,11vmin,78px);height:clamp(56px,11vmin,78px)}
-.ctrl[data-slot="1"]{right:calc(8px + env(safe-area-inset-right));bottom:calc(8px + env(safe-area-inset-bottom))}
+.ctrl[data-slot="0"]{left:calc(8px + env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom) + var(--lift,0px))}
+#touchLayer.solo .ctrl[data-slot="0"] .acts{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom) + var(--lift,0px));flex-direction:row;align-items:flex-end;gap:10px;pointer-events:none}
+#touchLayer.solo .ctrl[data-slot="0"] .ab{width:calc(clamp(56px,11vmin,78px) * var(--sz,1));height:calc(clamp(56px,11vmin,78px) * var(--sz,1))}
+.ctrl[data-slot="1"]{right:calc(8px + env(safe-area-inset-right));bottom:calc(8px + env(safe-area-inset-bottom) + var(--lift,0px))}
 .ctrl[data-slot="1"] .acts{order:-1}
-.ctrl[data-slot="2"]{left:calc(8px + env(safe-area-inset-left));top:calc(46px + env(safe-area-inset-top))}
-.ctrl[data-slot="3"]{right:calc(8px + env(safe-area-inset-right));top:calc(46px + env(safe-area-inset-top))}
+.ctrl[data-slot="2"]{left:calc(8px + env(safe-area-inset-left));top:calc(46px + env(safe-area-inset-top) - var(--lift,0px))}
+.ctrl[data-slot="3"]{right:calc(8px + env(safe-area-inset-right));top:calc(46px + env(safe-area-inset-top) - var(--lift,0px))}
 .ctrl[data-slot="3"] .acts{order:-1}
+.ctrl .ab.jmp{background:rgba(76,201,255,.92);color:#04121f}
+/* mancino: levetta a destra, tasti a sinistra */
+#touchLayer.lefty .ctrl[data-slot="0"]{left:auto;right:calc(8px + env(safe-area-inset-right))}
+#touchLayer.lefty .ctrl[data-slot="1"]{right:auto;left:calc(8px + env(safe-area-inset-left))}
+#touchLayer.lefty.solo .ctrl[data-slot="0"] .acts{right:auto;left:calc(14px + env(safe-area-inset-left))}
+.sliderRow{display:flex;align-items:center;gap:10px;justify-content:space-between;color:#b6c9ea;font:700 13px var(--font);margin:4px 0}
+.sliderRow input[type=range]{flex:1 1 auto;min-width:90px;accent-color:#4cc9ff}
+.sliderRow b{color:#fff;min-width:52px;text-align:right}
 
 .overlay{position:absolute;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(4,10,20,.78);backdrop-filter:blur(3px);padding:16px}
 .overlay.on{display:flex}

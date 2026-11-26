@@ -26,6 +26,8 @@
   let onEnd = null, onPauseChange = null;
   let remoteIn = [], netLocalSlot = null, padPrev = [];
   let randomMaps = false, specF = null, netGT = null;
+  // preferenze dei comandi su schermo (impostazioni)
+  let uiP = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0 };
 
   /* ---------------- utils ---------------- */
   const foe = (a, b) => a.team !== b.team;
@@ -754,6 +756,8 @@
       if (t.abi) { abi = 1; t.abi = 0; }
       if (t.sw) { sw = 1; t.sw = 0; }
       if (t.dp) { dp = 1; t.dp = 0; }
+      if (t.aTap) { a = 1; t.aTap = 0; }
+      if (t.jbtn) j = 1;
     }
     f.in.l = l ? 1 : 0; f.in.r = r ? 1 : 0; f.in.j = j ? 1 : 0;
     f.in.d = d ? 1 : 0; f.in.a = a ? 1 : 0;
@@ -1126,6 +1130,8 @@
     const ps = F.filter(f => !f.dead);
     const pos = spawnPositions(F.length);
     F.forEach((f, i) => {
+      // chi ha abbandonato la partita non rientra in gioco
+      if (f.left) { f.dead = true; f.hp = 0; f.rag = null; f.weapon = 'fist'; return; }
       f.hp = f.maxhp; f.dead = false; f.rag = null; f.deadT = 0;
       f.x = spawnOverride && spawnOverride[i] ? spawnOverride[i].x : (pos[i] != null ? pos[i] : 300); f.y = 300;
       f.vx = 0; f.vy = 0; f.stun = 0; f.cd = 0; f.abiCd = 0; f.atkT = -1;
@@ -1205,6 +1211,39 @@
     if (onPauseChange) onPauseChange(false);
   };
   E.setSound = function (v) { soundOn = !!v; if (G.audio) G.audio.setEnabled(soundOn); };
+
+  /* ---------------- comandi su schermo personalizzabili ---------------- */
+  E.setUiPrefs = function (p) {
+    uiP = Object.assign({}, uiP, p || {});
+    if (tLayer) {
+      tLayer.style.setProperty('--sz', uiP.sz);
+      tLayer.style.setProperty('--lift', (uiP.lift || 0) + 'px');
+      tLayer.classList.toggle('lefty', uiP.hand === 'left');
+    }
+    if (active) buildTouch();
+  };
+
+  /* ---------------- giocatori che escono / rientrano ---------------- */
+  E.playerLeft = function (i) {
+    const f = F[i];
+    if (!f) return;
+    f.left = true; f.dead = true; f.deadT = 0; f.hp = 0;
+    f.weapon = 'fist'; f.alt = 'fist'; f.rag = null;
+  };
+  E.rejoin = function (i, name) {
+    const f = F[i];
+    if (!f) return;
+    if (name) f.name = String(name).toUpperCase().slice(0, 14);
+    f.left = false; f.dead = false; f.deadT = 0; f.rag = null;
+    f.hp = f.maxhp;
+    const pos = spawnPositions(F.length);
+    f.x = pos[i] != null ? pos[i] : 300; f.y = 300; f.vx = 0; f.vy = 0;
+    f.stun = 0; f.atkT = -1; f.cd = 0; f.shield = 0; f.block = false;
+    f.weapon = f.roundWeapon || 'sword'; f.alt = f.roundAlt || 'fist';
+    burst(f.x, f.y - 40, 14, f.color, 220);
+  };
+  // quanti giocatori veri (non bot) sono ancora in partita
+  E.humanCount = function () { return F.filter(f => f.human && !f.left).length; };
   E.tick = function (dt) {
     if (!active || paused) return;
     step(dt || (1 / 60));
@@ -1280,12 +1319,13 @@
       el.className = 'ctrl';
       el.dataset.slot = i;
       el.style.setProperty('--c', f.color);
-      el.innerHTML =
+      el.      innerHTML =
         '<div class="stick"><div class="ring"></div><div class="knob"></div></div>' +
         '<div class="acts">' +
         '<button class="ab atk" aria-label="Attacco">⚔</button>' +
         '<button class="ab abi" aria-label="Abilità">✦<span class="cd"></span></button>' +
         '<button class="ab drop" aria-label="Lascia l\'arma">⤓</button>' +
+        (uiP.jump ? '<button class="ab jmp" aria-label="Salto">↑</button>' : '') +
         '</div>';
       tLayer.appendChild(el);
       const stick = el.querySelector('.stick');
@@ -1303,7 +1343,8 @@
         knob.style.transform = 'translate(-50%,-50%) translate(' + (kx * 26) + 'px,' + (ky * 26) + 'px)';
         t.l = kx < -.28 ? 1 : 0;
         t.r = kx > .28 ? 1 : 0;
-        t.j = ky < -.38 ? 1 : 0;
+        // col pulsante salto attivo, la levetta in su non salta più
+        t.j = (!uiP.jump && ky < -.38) ? 1 : 0;
         t.d = ky > .42 ? 1 : 0;
         return Math.hypot(kx, ky);
       };
@@ -1329,7 +1370,11 @@
         apply((ev.clientX - cx) / R, (ev.clientY - cy) / R);
       });
       stick.addEventListener('pointerup', ev => {
-        if (t.active && Math.abs(ev.clientX - cx) + Math.abs(ev.clientY - cy) > R * .5) fireAbi();
+        if (t.active && Math.abs(ev.clientX - cx) + Math.abs(ev.clientY - cy) > R * .5) {
+          // rilascio della levetta: abilità (default), attacco, oppure niente
+          if (uiP.rel === 'atk') t.aTap = 1;
+          else if (uiP.rel !== 'none') fireAbi();
+        }
         reset();
       });
       stick.addEventListener('pointercancel', reset);
@@ -1344,6 +1389,14 @@
       const abi = el.querySelector('.abi');
       abi.addEventListener('pointerdown', ev => { ev.preventDefault(); fireAbi(); });
       abi.addEventListener('contextmenu', e => e.preventDefault());
+
+      // pulsante salto (opzionale)
+      const jmpB = el.querySelector('.jmp');
+      if (jmpB) {
+        jmpB.addEventListener('pointerdown', ev => { ev.preventDefault(); t.jbtn = 1; try { jmpB.setPointerCapture(ev.pointerId); } catch (e) {} });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev2 => jmpB.addEventListener(ev2, () => { t.jbtn = 0; }));
+        jmpB.addEventListener('contextmenu', e => e.preventDefault());
+      }
 
       // pulsante "lascia l'arma": passa dallo stesso canale degli altri comandi
       const drp = el.querySelector('.drop');

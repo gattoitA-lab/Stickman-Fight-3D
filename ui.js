@@ -21,8 +21,9 @@
     skin: null, variants: [], bossTier: 0, bestWave: 0,
     lastDaily: '', streak: 0, sound: true, music: true, sfx: true,
     adDay: '', adCount: 0,
-    skyWeapons: false, controls: null
+    skyWeapons: false, controls: null, touch: null
   };
+  const DEF_TOUCH = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0 };
   const DEFAULT_CTRL = {
     p1: { l: 'KeyA', r: 'KeyD', j: 'KeyW', d: 'KeyS', a: 'KeyF', abi: 'KeyE', sw: 'KeyR' },
     p2: { l: 'ArrowLeft', r: 'ArrowRight', j: 'ArrowUp', d: 'ArrowDown', a: 'KeyL', abi: 'KeyK', sw: 'KeyJ' }
@@ -45,6 +46,7 @@
       if (raw.music == null) { p.music = raw.sound !== false; dirty = true; }
       if (raw.sfx == null) { p.sfx = raw.sound !== false; dirty = true; }
       p.sound = p.music || p.sfx;
+      p.touch = Object.assign({}, DEF_TOUCH, p.touch || {});
       p.controls = Object.assign({}, DEFAULT_CTRL, p.controls || {});
       p.controls.p1 = Object.assign({}, DEFAULT_CTRL.p1, p.controls.p1 || {});
       p.controls.p2 = Object.assign({}, DEFAULT_CTRL.p2, p.controls.p2 || {});
@@ -551,6 +553,62 @@
       card3.appendChild(ctrlReset);
       body.appendChild(card3);
 
+      const cardT = el('div', 'card');
+      cardT.innerHTML = '<h3>COMANDI SULLO SCHERMO</h3><p class="hint">Dimensione, altezza, lato, salto e cosa fa il rilascio della levetta. Le modifiche valgono subito, anche a partita in corso.</p>';
+      const applyTouch = () => { saveProfile(); G.engine.setUiPrefs(P.touch); };
+
+      const slider = (label, min, max, step, get, set, fmt) => {
+        const wrap = el('label', 'sliderRow');
+        wrap.appendChild(el('span', '', label));
+        const inp = el('input');
+        inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = get();
+        const val = el('b', '', fmt(get()));
+        inp.oninput = () => { set(Number(inp.value)); val.textContent = fmt(Number(inp.value)); applyTouch(); };
+        wrap.appendChild(inp); wrap.appendChild(val);
+        return wrap;
+      };
+      cardT.appendChild(slider('📏 Dimensione', '0.75', '1.5', '0.05', () => P.touch.sz, v => { P.touch.sz = v; }, v => Math.round(v * 100) + '%'));
+      cardT.appendChild(slider('⬆️ Altezza', '0', '160', '10', () => P.touch.lift, v => { P.touch.lift = v; }, v => v + ' px'));
+
+      const tRow = el('div', 'row');
+      const handB = el('button', 'btn dark', '');
+      const paintHand = () => {
+        handB.textContent = P.touch.hand === 'left' ? '🤚 MANCINO (levetta a destra)' : '✋ DESTRO (levetta a sinistra)';
+      };
+      handB.onclick = () => { P.touch.hand = P.touch.hand === 'left' ? 'right' : 'left'; paintHand(); applyTouch(); G.audio.sfx('click'); };
+      paintHand();
+
+      const jumpB = el('button', 'btn ' + (P.touch.jump ? 'green' : 'dark'), '');
+      const paintJump = () => {
+        jumpB.className = 'btn ' + (P.touch.jump ? 'green' : 'dark');
+        jumpB.textContent = P.touch.jump ? '⬆ SALTO: PULSANTE' : '🕹️ SALTO: LEVETTA IN SU';
+      };
+      jumpB.onclick = () => { P.touch.jump = !P.touch.jump; paintJump(); applyTouch(); G.audio.sfx('click'); };
+      paintJump();
+
+      const relB = el('button', 'btn dark', '');
+      const RELS = [['abi', '✦ RILASCIO LEVETTA: ABILITÀ'], ['atk', '⚔ RILASCIO LEVETTA: ATTACCO'], ['none', '🚫 RILASCIO LEVETTA: NIENTE']];
+      const paintRel = () => {
+        const cur = RELS.find(r => r[0] === P.touch.rel) || RELS[0];
+        relB.textContent = cur[1];
+      };
+      relB.onclick = () => {
+        const i = RELS.findIndex(r => r[0] === P.touch.rel);
+        P.touch.rel = RELS[(i + 1) % RELS.length][0];
+        paintRel(); applyTouch(); G.audio.sfx('click');
+      };
+      paintRel();
+
+      tRow.appendChild(handB); tRow.appendChild(jumpB); tRow.appendChild(relB);
+      cardT.appendChild(tRow);
+      const resetTouch = el('button', 'btn red', '↺ COMANDI DI DEFAULT');
+      resetTouch.onclick = () => {
+        P.touch = Object.assign({}, DEF_TOUCH);
+        applyTouch(); G.audio.sfx('click'); pageSettings();
+      };
+      cardT.appendChild(resetTouch);
+      body.appendChild(cardT);
+
       const card4 = el('div', 'card');
       card4.innerHTML = '<h3>CREDITI</h3><p class="hint">Stickman Fight 3D · v2.0 · un gioco <b>GattoHub / GattoItaliano</b>. Motore, personaggi e interfaccia originali, disegnati da zero.</p>';
       body.appendChild(card4);
@@ -692,11 +750,28 @@
   function beginNet(room, slot) {
     netSession = room; netSlot = slot;
     room.matchSlot = slot;
+    if (slot === 0) {
+      room.onLeave = s => handleLeave(s);
+      room.onJoin = s => handleJoin(s);
+    }
     room.onData = (d, from) => {
       if (!d || !d.t) return;
       if (d.t === 'in') G.engine.setRemoteInput(d.slot != null ? d.slot : from, d.i);
       else if (d.t === 'st' && slot !== 0) G.engine.applyNetState(d.s);
       else if (d.t === 'end' && slot !== 0) onMatchEnd(d.res);
+      else if (d.t === 'pv' && slot === 0) {
+        const pl = room.players.find(p => p.slot === from) || {};
+        hostStartVote(d.k === 'resume' ? 'resume' : 'pause', pl.name || 'Qualcuno');
+      }
+      else if (d.t === 'pvc' && slot === 0) hostCastVote(from, !!d.v);
+      else if (d.t === 'vote' && slot !== 0) openVote(d.k, d.by);
+      else if (d.t === 'vc' && slot !== 0) $('#voteCount').textContent = d.y + ' sì · ' + (d.g - d.y) + ' no · ' + d.g + '/' + d.n + ' voti';
+      else if (d.t === 'vr' && slot !== 0) applyVoteResult(!!d.v, d.k);
+      else if (d.t === 'hold' && slot !== 0) {
+        closeVote();
+        if (d.on) { $('#pauseInfo').textContent = 'In attesa di altri giocatori…'; G.engine.pause(true); }
+        else { $('#pauseInfo').textContent = PAUSE_INFO; G.engine.pause(false); }
+      }
     };
     if (slot !== 0) {
       const inputTimer = setInterval(() => {
@@ -714,10 +789,137 @@
     }
   }
 
-  function startLanMatch(room) {
-    if (!room.isHost) return;
-    const mapRaw = pick(G.MAPS.filter(m => m.ground));
+  function startLanMatch(room, mapId) {
+    if (!room || !room.isHost) return;
+    const pools = G.MAPS.filter(m => m.ground);
+    const mapRaw = (mapId && G.MAPS.find(m => m.id === mapId)) || pick(pools);
     room.start(mapRaw.id, lobbyMatchPlayers(room));
+  }
+
+  /* ---------------- rete: voto pausa, uscite e rientri ---------------- */
+  let matchState = null, awaitingPlayers = false;
+  let voteState = null, voteTimer = null;
+  const PAUSE_INFO = "Comandi: joystick per muoverti, ⚔ per attaccare, ✦ per l'abilità, ⤓ per lasciare l'arma a terra. Rilascia il joystick per usare l'abilità.";
+
+  function setupMatchState(mapId, lineup, room) {
+    const slotIndex = {};
+    if (room) {
+      room.players.slice().sort((a, b) => (a.host ? -1 : b.host ? 1 : a.slot - b.slot))
+        .forEach((p, i) => { slotIndex[p.slot] = i; });
+    }
+    for (let i = 0; i < lineup.length; i++) if (slotIndex[i] == null) slotIndex[i] = i;
+    matchState = { mapId: mapId, lineup: lineup.slice(), slotIndex: slotIndex, free: [] };
+    awaitingPlayers = false;
+  }
+
+  function handleLeave(slot) {
+    if (!netSession || netSlot !== 0 || !matchState) return;
+    const idx = matchState.slotIndex[slot];
+    if (idx == null || idx === 0) return;
+    G.engine.playerLeft(idx);
+    if (matchState.free.indexOf(idx) < 0) matchState.free.push(idx);
+    if (G.engine.isPlaying() && G.engine.humanCount() < 2) {
+      awaitingPlayers = true;
+      G.engine.pause(true);
+      $('#pauseInfo').textContent = 'Sei rimasto solo: in attesa che entri qualcuno…';
+      try { netSession.broadcast({ t: 'hold', on: 1 }); } catch (e) {}
+      toast('Sei rimasto solo: partita in pausa finché entra qualcuno');
+    }
+  }
+
+  function handleJoin(slot) {
+    if (!netSession || netSlot !== 0 || !matchState) return 'ok';
+    if (!G.engine.isPlaying()) return 'ok';
+    if (!matchState.free.length) return 'busy';
+    const idx = matchState.free.shift();
+    matchState.slotIndex[slot] = idx;
+    const pl = netSession.players.find(x => x.slot === slot) || {};
+    const name = String(pl.name || 'GIOCATORE').toUpperCase().slice(0, 14);
+    matchState.lineup[idx] = {
+      human: true, name: name, color: G.COLS[idx % 6], color2: '#ffffff', head: 'none',
+      weapon: 'sword', alt: 'gun', diff: 'normal', skin: null
+    };
+    try { netSession.sendToSlot(slot, { t: 'start', slot: idx, mapId: matchState.mapId, players: matchState.lineup }); } catch (e) {}
+    G.engine.rejoin(idx, name);
+    if (awaitingPlayers) {
+      awaitingPlayers = false;
+      $('#pauseInfo').textContent = PAUSE_INFO;
+      try { netSession.broadcast({ t: 'hold', on: 0 }); } catch (e) {}
+      setTimeout(() => { if (G.engine.isPlaying() && G.engine.isPaused()) G.engine.pause(false); }, 900);
+    }
+    toast(name + ' è entrato in partita');
+    return 'match';
+  }
+
+  function openVote(kind, by) {
+    const ov = $('#voteOverlay');
+    if (!ov) return;
+    $('#voteTitle').textContent = kind === 'resume' ? 'RIPRENDERE LA PARTITA?' : 'METTERE IN PAUSA?';
+    $('#voteText').textContent = '“' + by + '” vuole ' + (kind === 'resume' ? 'riprendere' : 'mettere in pausa') + ' la partita: vota anche tu.';
+    $('#voteCount').textContent = 'Vince la maggioranza';
+    ov.classList.add('on');
+  }
+  function closeVote() { const ov = $('#voteOverlay'); if (ov) ov.classList.remove('on'); }
+
+  function requestPauseToggle() {
+    if (!netSession || netSlot == null) { G.engine.togglePause(); return; }
+    const kind = G.engine.isPaused() ? 'resume' : 'pause';
+    if (netSlot === 0) hostStartVote(kind, P.name);
+    else {
+      try { netSession.send({ t: 'pv', k: kind }); } catch (e) {}
+      toast(kind === 'pause' ? 'Richiesta di pausa inviata' : 'Richiesta di ripresa inviata');
+    }
+  }
+
+  function hostStartVote(kind, by) {
+    if (voteState) return;
+    const voters = [0].concat(netSession.players.filter(p => !p.host && !p.bot).map(p => p.slot));
+    voteState = { kind: kind, by: String(by || P.name), voters: voters, votes: {} };
+    voteState.votes[0] = true;
+    openVote(kind, voteState.by);
+    $('#voteCount').textContent = 'Vince la maggioranza · 1/' + voters.length + ' voti';
+    try { netSession.broadcast({ t: 'vote', k: kind, by: voteState.by, n: voters.length }); } catch (e) {}
+    clearTimeout(voteTimer);
+    voteTimer = setTimeout(() => hostFinishVote(), 12000);
+  }
+
+  function hostCastVote(slot, yes) {
+    if (!voteState) return;
+    voteState.votes[slot] = !!yes;
+    const got = Object.keys(voteState.votes).length;
+    const yesN = Object.keys(voteState.votes).filter(k => voteState.votes[k]).length;
+    $('#voteCount').textContent = yesN + ' sì · ' + (got - yesN) + ' no · ' + got + '/' + voteState.voters.length + ' voti';
+    try { netSession.broadcast({ t: 'vc', y: yesN, g: got, n: voteState.voters.length }); } catch (e) {}
+    if (got >= voteState.voters.length) hostFinishVote();
+  }
+
+  function hostFinishVote() {
+    if (!voteState) return;
+    clearTimeout(voteTimer); voteTimer = null;
+    const total = voteState.voters.length;
+    const yesN = Object.keys(voteState.votes).filter(k => voteState.votes[k]).length;
+    const pass = yesN * 2 > total;   // pareggio = no
+    const kind = voteState.kind;
+    voteState = null;
+    closeVote();
+    try { netSession.broadcast({ t: 'vr', v: pass ? 1 : 0, k: kind }); } catch (e) {}
+    applyVoteResult(pass, kind);
+  }
+
+  function applyVoteResult(pass, kind) {
+    closeVote();
+    if (!pass) { toast('Votazione: non passa'); return; }
+    G.engine.pause(kind === 'pause');
+    toast(kind === 'pause' ? 'Pausa approvata' : 'Si riprende');
+  }
+
+  function sendMyVote(yes) {
+    if (netSlot === 0) hostCastVote(0, yes);
+    else {
+      try { netSession.send({ t: 'pvc', v: yes ? 1 : 0 }); } catch (e) {}
+      closeVote();
+      toast('Voto inviato');
+    }
   }
 
   function openLanLobby(room) {
@@ -739,6 +941,7 @@
     room.onStart = msg => {
       const raw = G.MAPS.find(m => m.id === msg.mapId) || G.MAPS[0];
       const map = mapWithBg(raw);
+      setupMatchState(msg.mapId, msg.players, room);
       launch(netCfg(map, msg.players, msg.slot, msg.slot !== 0));
       beginNet(room, msg.slot);
     };
@@ -748,7 +951,7 @@
       room.closed = true;
       stopNet();
       G.audio.sfx('error');
-      toast(reason === 'kick' ? 'Sei stato espulso dalla lobby' : reason === 'close' ? 'Host disconnesso' : 'La lobby è stata chiusa');
+      toast(reason === 'kick' ? 'Sei stato espulso dalla lobby' : reason === 'busy' ? 'Partita in corso: riprova tra poco' : reason === 'close' ? 'Host disconnesso' : 'La lobby è stata chiusa');
       pageLan();
     };
 
@@ -1181,7 +1384,9 @@
     G.audio.setSfx(P.sfx);
     if (config.localSlot == null) config.skyWeapons = P.skyWeapons;
     config.controls = P.controls;
+    G.engine.setUiPrefs(P.touch);
     G.engine.start(config);
+    const rs = $('#btnRestart'); if (rs) rs.style.display = netSession ? 'none' : '';
   }
 
   /* ---------------- fine partita ---------------- */
@@ -1221,7 +1426,20 @@
     $('#endOverlay').classList.add('on');
     G.audio.sfx(res.result === 'win' ? 'win' : res.result === 'lose' ? 'lose' : 'coin');
     const again = $('#endAgain');
-    if (netSession || netSlot != null) {
+    if (netSession) {
+      const em = $('#endMaps'); if (em) em.style.display = 'none';
+      if (netSlot === 0) {
+        // rivincita con la stessa squadra: la rilancia l'host per tutti
+        again.style.display = '';
+        again.textContent = 'RIVINCITA';
+        again.onclick = () => { G.audio.sfx('click'); startLanMatch(netSession, matchState && matchState.mapId); };
+      } else {
+        again.style.display = 'none';
+        if (em) em.style.display = 'none';
+        const h = el('p', 'hint', 'Aspetta l\'host per la rivincita con la stessa squadra.');
+        again.parentNode.parentNode.appendChild(h);
+      }
+    } else if (netSession || netSlot != null) {
       again.style.display = 'none';
       const em = $('#endMaps'); if (em) em.style.display = 'none';
     } else {
@@ -1267,6 +1485,7 @@
     G.ui.openSetup = openSetup;
     G.ui.page = page;
 
+    G.engine.setUiPrefs(P.touch);
     renderHUD();
     G.audio.setMusic(P.music);
     G.audio.setSfx(P.sfx);
@@ -1290,10 +1509,12 @@
       if (e.target.closest('#setupBack')) { home(); return; }
     });
 
-    $('#btnResume').onclick = () => G.engine.pause(false);
+    $('#btnResume').onclick = () => { if (netSession) requestPauseToggle(); else G.engine.pause(false); };
     $('#btnRestart').onclick = () => { if (lastConfig) launch(lastConfig); };
-    $('#btnQuit').onclick = () => { G.engine.quit(); home(); };
-    $('#pauseBtn').onclick = () => G.engine.togglePause();
+    $('#btnQuit').onclick = () => { stopNet(); G.engine.quit(); home(); };
+    $('#pauseBtn').onclick = () => requestPauseToggle();
+    $('#voteYes').onclick = () => sendMyVote(true);
+    $('#voteNo').onclick = () => sendMyVote(false);
 
     $('#fs').onclick = toggleFS;
     $('#splash').addEventListener('click', hideSplash);

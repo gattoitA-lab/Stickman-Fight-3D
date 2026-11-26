@@ -116,6 +116,8 @@
     };
     room.close = function () {
       room.closed = true;
+      if (room.watchdog) { clearInterval(room.watchdog); room.watchdog = null; }
+      if (room.hb) { clearInterval(room.hb); room.hb = null; }
       for (const c of room.conns) { try { if (c.conn && c.conn.open) c.conn.send({ t: 'bye' }); } catch (e) {} try { c.conn.close(); } catch (e) {} }
       room.conns = [];
       try { room.peer && room.peer.destroy(); } catch (e) {}
@@ -128,10 +130,12 @@
           try { conn.close(); } catch (e) {}
           return;
         }
-        const entry = { conn: conn, slot: -1, id: 'g' + (room.seq++) };
+        const entry = { conn: conn, slot: -1, id: 'g' + (room.seq++), last: Date.now() };
         room.conns.push(entry);
         conn.on('data', d => {
           if (!d || !d.t) return;
+          entry.last = Date.now();
+          if (d.t === 'hb') return;
           if (d.t === 'hello') {
             if (entry.slot >= 0) return;
             const slot = room.freeSlot();
@@ -142,13 +146,23 @@
             room.players.push({ id: entry.id, slot: slot, name: entry.name, level: entry.level, bot: false, host: false });
             room.players.sort((a, b) => a.slot - b.slot);
             room.pushLobby();
+            // se la partita è in corso l'host decide se far entrare subito o rifiutare
+            if (room.onJoin && room.onJoin(slot) === 'busy') {
+              try { conn.send({ t: 'busy' }); } catch (e) {}
+              room.players = room.players.filter(p => p.slot !== slot);
+              room.conns = room.conns.filter(x => x !== entry);
+              room.pushLobby();
+              try { conn.close(); } catch (e) {}
+              return;
+            }
             fail(entry.name + ' (liv. ' + entry.level + ') è entrato');
             return;
           }
           if (d.t === 'in') { if (entry.slot >= 0) room.onData && room.onData(d, entry.slot); return; }
-          if (d.t === 'leave') {
+          if (d.t === 'leave' || d.t === 'bye') {
             room.players = room.players.filter(p => p.slot !== entry.slot);
             room.conns = room.conns.filter(x => x !== entry);
+            if (!entry.gone) { entry.gone = true; if (entry.slot >= 0 && room.onLeave) room.onLeave(entry.slot); }
             room.pushLobby();
             return;
           }
@@ -157,6 +171,7 @@
         conn.on('close', () => {
           if (entry.slot >= 0) {
             room.players = room.players.filter(p => p.id !== entry.id);
+            if (!entry.gone) { entry.gone = true; if (room.onLeave) room.onLeave(entry.slot); }
             fail(entry.name + ' è uscito');
           }
           room.conns = room.conns.filter(x => x !== entry);
@@ -164,6 +179,23 @@
         });
         conn.on('error', () => {});
       });
+      // watchdog: se un ospite sparisce senza chiudere (chiude la scheda, perde la rete)
+      room.watchdog = setInterval(() => {
+        if (room.closed) return;
+        const now = Date.now();
+        for (const c of room.conns.slice()) {
+          if (c.last && now - c.last > 9000) {
+            try { c.conn.close(); } catch (e) {}
+            room.conns = room.conns.filter(x => x !== c);
+            if (c.slot >= 0 && !c.gone) {
+              c.gone = true;
+              room.players = room.players.filter(p => p.slot !== c.slot);
+              if (room.onLeave) room.onLeave(c.slot);
+              room.pushLobby();
+            }
+          }
+        }
+      }, 3000);
     } else {
       const conn = guestConn;
       room.pendingConn = conn;
@@ -180,6 +212,7 @@
           if (d.t === 'kick') { room.kickedByHost = true; if (room.onKick) room.onKick('kick'); return; }
           if (d.t === 'bye') { fail('La lobby è stata chiusa'); if (room.onKick) room.onKick('bye'); return; }
           if (d.t === 'full') { if (room.onFull) room.onFull(); return; }
+          if (d.t === 'busy') { fail('Partita in corso: riprova tra poco'); if (room.onKick) room.onKick('busy'); return; }
           if (room.onData) room.onData(d, null);
         });
         conn.on('close', () => {
@@ -247,7 +280,10 @@
         const room = makeRoom(peer, id.replace(PREFIX, '').toUpperCase(), false, me, conn);
         conn.on('open', () => {
           try { conn.send({ t: 'hello', name: room.me.name, level: room.me.level }); } catch (e) {}
+          // battito: fa capire all'host che ci sono anche se non mando comandi
+          room.hb = setInterval(() => { try { if (conn.open) conn.send({ t: 'hb' }); } catch (e) {} }, 2000);
         });
+        conn.on('close', () => { if (room.hb) { clearInterval(room.hb); room.hb = null; } });
         conn.on('error', () => finish(null));
         peer.on('error', () => finish(null));
         // la prima lobby conferma che la stanza esiste ed è libera

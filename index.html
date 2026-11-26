@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Bungee&display=swap">
-<link rel="stylesheet" href="./style.css?v=40">
+<link rel="stylesheet" href="./style.css?v=42">
 </head>
 <body>
 
@@ -156,16 +156,28 @@
     </div>
   </div>
 
+  <div class="overlay" id="voteOverlay">
+    <div class="modal">
+      <h2 id="voteTitle">PAUSA?</h2>
+      <p id="voteText">…</p>
+      <p class="hint" id="voteCount"></p>
+      <div class="row" style="justify-content:center">
+        <button class="btn green" id="voteYes">SÌ</button>
+        <button class="btn red" id="voteNo">NO</button>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay" id="endOverlay">
     <div class="modal" id="endBox"></div>
   </div>
 </section>
 
-<script src="./data.js?v=40"></script>
-<script src="./audio.js?v=40"></script>
-<script src="./net.js?v=40"></script>
-<script src="./engine.js?v=40"></script>
-<script src="./editor.js?v=40"></script>
-<script src="./ui.js?v=40"></script>
+<script src="./data.js?v=42"></script>
+<script src="./audio.js?v=42"></script>
+<script src="./net.js?v=42"></script>
+<script src="./engine.js?v=42"></script>
+<script src="./editor.js?v=42"></script>
+<script src="./ui.js?v=42"></script>
 </body>
 </html>
