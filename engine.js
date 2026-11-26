@@ -53,7 +53,7 @@
       atkT: -1, atkDone: false, hitSet: null, walk: 0, moved: 0,
       dead: false, rag: null, deadT: 0, s: o.s || 1, giant: false,
       aiT: 0, jumpCool: 0, hitT: 0, slowT: 0, dashT: 0, kills: 0,
-      in: { l: 0, r: 0, j: 0, d: 0, a: 0, abi: 0, sw: 0 },
+      in: { l: 0, r: 0, j: 0, d: 0, a: 0, abi: 0, sw: 0, dp: 0 },
       keys: null, touch: null, slot: -1, riding: null,
       trail: [], deform: { a: 1, l: 1 }, defT: 0, shieldT: 0
     };
@@ -210,10 +210,24 @@
     });
   }
 
+  // lascia a terra l'arma che si ha in mano (pulsante dedicato)
+  function dropHeld(f) {
+    if (!f || f.dead || !WP[f.weapon] || f.weapon === 'fist') return;
+    const second = f.alt;
+    const had = f.weapon;
+    // lancio dietro la schiena + mezzo secondo prima di poterla riprendere
+    dropWeapon(f, .8, true);
+    // se il modificatore "cambio arma" è attivo, la seconda arma passa in mano
+    if (cfg && cfg.switchWep && WP[second] && second !== 'fist') f.weapon = second;
+    floatText(f.x, f.y - 84 * f.s, 'Arma a terra', '#ffd24a');
+    sfx(320, .12, 'triangle', .05, 160);
+    if (had) burst(f.x, f.y - 60 * f.s, 6, WP[had].col, 160);
+  }
+
   // l'arma del caduto resta a terra come bottino per chi è ancora in piedi
-  function dropWeapon(o) {
+  function dropWeapon(o, noPickT, back) {
     if (!o || !WP[o.weapon] || o.weapon === 'fist') return;
-    addPickup(o.weapon, o.x, o.y - 56 * o.s, -300);
+    addPickup(o.weapon, o.x - (back ? o.face * 46 : 0), o.y - 56 * o.s, -300, noPickT);
     o.weapon = 'fist'; o.alt = 'fist'; o.atkT = -1; o.hitSet = null;
   }
 
@@ -711,11 +725,12 @@
       f.in.d = r.d ? 1 : 0; f.in.a = r.a ? 1 : 0;
       if (r.abi) { f.in.abi = 1; r.abi = 0; }
       if (r.sw) { f.in.sw = 1; r.sw = 0; }
+      if (r.dp) { f.in.dp = 1; r.dp = 0; }
       return;
     }
     const k = f.keys, t = f.touch;
     const kd = c => c && keys[c] ? 1 : 0;
-    let l = 0, r = 0, j = 0, d = 0, a = 0, abi = 0, sw = 0;
+    let l = 0, r = 0, j = 0, d = 0, a = 0, abi = 0, sw = 0, dp = 0;
     if (k) {
       l = kd(k.l); r = kd(k.r); j = kd(k.j); d = kd(k.d); a = kd(k.a); abi = kd(k.abi); sw = kd(k.sw);
     }
@@ -738,11 +753,13 @@
       l = l || t.l; r = r || t.r; j = j || t.j; d = d || t.d; a = a || t.a;
       if (t.abi) { abi = 1; t.abi = 0; }
       if (t.sw) { sw = 1; t.sw = 0; }
+      if (t.dp) { dp = 1; t.dp = 0; }
     }
     f.in.l = l ? 1 : 0; f.in.r = r ? 1 : 0; f.in.j = j ? 1 : 0;
     f.in.d = d ? 1 : 0; f.in.a = a ? 1 : 0;
     if (abi) f.in.abi = 1;
     if (sw) f.in.sw = 1;
+    if (dp) f.in.dp = 1;
   }
 
   /* ---------------- update fighter ---------------- */
@@ -770,12 +787,13 @@
       if (f.in.a) tryAttack(f);
       if (f.in.abi) doAbility(f);
       if (f.in.sw) switchWeapon(f);
+      if (f.in.dp) dropHeld(f);
     } else if (f.stun <= 0 && lock) {
       f.vx *= Math.pow(.02, dt);
     } else {
       f.vx *= Math.pow(.25, dt);
     }
-    f.in.abi = 0; f.in.sw = 0;
+    f.in.abi = 0; f.in.sw = 0; f.in.dp = 0;
 
     if (f.dashT > 0) {
       f.dashT -= dt;
@@ -1243,7 +1261,7 @@
     const f = F[slot];
     if (!f) return null;
     const i = f._netIn || f.in;
-    return { l: i.l, r: i.r, j: i.j, d: i.d, a: i.a, abi: i.abi, sw: i.sw };
+    return { l: i.l, r: i.r, j: i.j, d: i.d, a: i.a, abi: i.abi, sw: i.sw, dp: i.dp };
   };
   E.setPauseHandler = fn => { onPauseChange = fn; E.onPauseChange = fn; };
 
@@ -1262,6 +1280,7 @@
         '<div class="acts">' +
         '<button class="ab atk" aria-label="Attacco">⚔</button>' +
         '<button class="ab abi" aria-label="Abilità">✦<span class="cd"></span></button>' +
+        '<button class="ab drop" aria-label="Lascia l\'arma">⤓</button>' +
         '</div>';
       tLayer.appendChild(el);
       const stick = el.querySelector('.stick');
@@ -1321,6 +1340,12 @@
       abi.addEventListener('pointerdown', ev => { ev.preventDefault(); fireAbi(); });
       abi.addEventListener('contextmenu', e => e.preventDefault());
 
+      // pulsante "lascia l'arma": passa dallo stesso canale degli altri comandi
+      const drp = el.querySelector('.drop');
+      drp.addEventListener('pointerdown', ev => { ev.preventDefault(); t.dp = 1; });
+      drp.addEventListener('contextmenu', e => e.preventDefault());
+
+      f._dropEl = drp;
       f._cdEl = cd;
     });
   }
@@ -1332,6 +1357,8 @@
       const p = clamp(f.abiCd / w.acd, 0, 1);
       f._cdEl.style.transform = 'scaleY(' + p + ')';
       if (f._cdEl.parentElement) f._cdEl.parentElement.style.opacity = f.abiCd > 0 ? .55 : 1;
+      // il pulsante "lascia" si spegne quando sei a pugni
+      if (f._dropEl) f._dropEl.style.opacity = WP[f.weapon] && f.weapon !== 'fist' && !f.dead ? 1 : .38;
     }
   }
 
@@ -1407,8 +1434,8 @@
     for (const f of F) {
       if (f.cpu || f.local === false) continue;
       readInput(f, dt);
-      f._netIn = { l: f.in.l, r: f.in.r, j: f.in.j, d: f.in.d, a: f.in.a, abi: f.in.abi, sw: f.in.sw };
-      f.in.abi = 0; f.in.sw = 0;
+      f._netIn = { l: f.in.l, r: f.in.r, j: f.in.j, d: f.in.d, a: f.in.a, abi: f.in.abi, sw: f.in.sw, dp: f.in.dp };
+      f.in.abi = 0; f.in.sw = 0; f.in.dp = 0;
     }
     for (const f of F) {
       const t = f.net;

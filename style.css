@@ -213,6 +213,8 @@ body.gaming #fs{opacity:.35}
 .ctrl .ab.atk{background:var(--c,#ff6a57)}
 .ctrl .ab.abi{background:rgba(20,40,70,.8);border-color:rgba(255,255,255,.35);position:relative;overflow:hidden}
 .ctrl .ab.abi .cd{position:absolute;inset:0;background:rgba(0,0,0,.55);transform-origin:bottom;transform:scaleY(0)}
+.ctrl .ab.drop{background:rgba(255,196,66,.9);color:#231704;border-color:rgba(0,0,0,.55);font-weight:800}
+.ctrl .ab.drop:active{filter:brightness(1.1)}
 .ctrl .ab:active{filter:brightness(1.25)}
 .ctrl[data-slot="0"]{left:calc(8px + env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom))}
 #touchLayer.solo .ctrl[data-slot="0"] .acts{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));flex-direction:row;align-items:flex-end;gap:10px;pointer-events:none}
