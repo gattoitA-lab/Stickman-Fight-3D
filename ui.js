@@ -24,7 +24,7 @@
     skyWeapons: false, controls: null, touch: null,
     ads: null
   };
-  const DEF_ADS = { net: 'none', zone: '', fn: '' };
+  const DEF_ADS = { net: 'monetag', tag: '', lang: 'auto' };
   const DEF_TOUCH = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0 };
   const DEFAULT_CTRL = {
     p1: { l: 'KeyA', r: 'KeyD', j: 'KeyW', d: 'KeyS', a: 'KeyF', abi: 'KeyE', sw: 'KeyR' },
@@ -50,6 +50,8 @@
       p.sound = p.music || p.sfx;
       p.touch = Object.assign({}, DEF_TOUCH, p.touch || {});
       p.ads = Object.assign({}, DEF_ADS, p.ads || {});
+      if (!p.ads.tag && p.ads.zone) { p.ads.tag = String(p.ads.zone); dirty = true; }
+      if (p.ads.net && p.ads.net !== 'monetag') { p.ads.net = 'monetag'; dirty = true; }
       p.controls = Object.assign({}, DEFAULT_CTRL, p.controls || {});
       p.controls.p1 = Object.assign({}, DEFAULT_CTRL.p1, p.controls.p1 || {});
       p.controls.p2 = Object.assign({}, DEFAULT_CTRL.p2, p.controls.p2 || {});
@@ -261,6 +263,13 @@
     return ({ it: 'IT', es: 'ES', fr: 'FR', de: 'DE', pt: 'PT', en: 'EN' })[base] || 'EN';
   }
 
+  function adLang() {
+    const v = (P.ads && P.ads.lang) || 'auto';
+    if (v === 'it') return 'IT';
+    if (v === 'en') return 'EN';
+    return adCountry();
+  }
+
   function adsLeft() {
     if (P.adDay !== today()) return ADS_PER_DAY;
     return Math.max(0, ADS_PER_DAY - (P.adCount || 0));
@@ -278,47 +287,70 @@
     if (ov) ov.remove();
   }
 
-  /* --- pubblicità vera: rete esterna (es. Monetag) configurata nelle impostazioni --- */
+  /* --- pubblicità vera: tag Monetag incollato dalle impostazioni --- */
   let adSdkKey = '';
 
-  function adsReal() {
-    const a = P.ads || {};
-    return a.net && a.net !== 'none' && (String(a.zone || '').trim() || String(a.fn || '').trim());
+  // accetta: solo ID zona, <script ... data-zone=".." data-sdk=".."></script>, oppure un link diretto
+  function parseAdTag() {
+    const raw = String((P.ads || {}).tag || '').trim();
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) return { url: raw, zone: '', fn: '', src: '' };
+    let src = '';
+    const sm = raw.match(/src\s*=\s*["']([^"']+)["']/i);
+    if (sm) src = sm[1];
+    if (src.indexOf('//') === 0) src = 'https:' + src;
+    const zm = raw.match(/data-zone\s*=\s*["']?(\d+)/i) || raw.match(/^(\d{4,})$/);
+    const zone = zm ? zm[1] : '';
+    const fm = raw.match(/data-sdk\s*=\s*["']([A-Za-z0-9_]+)["']/i);
+    const fn = fm ? fm[1] : (zone ? 'show_' + zone : '');
+    return { url: '', zone: zone, fn: fn, src: src };
   }
 
-  function loadAdSdk(net, zone) {
+  function adsReal() {
+    const t = parseAdTag();
+    return !!(t && (t.url || t.zone));
+  }
+
+  function loadAdSdk(t) {
     return new Promise((resolve, reject) => {
-      const key = net + ':' + zone;
-      if (adSdkKey === key || (zone && typeof window['show_' + zone] === 'function')) return resolve();
-      if (net !== 'monetag') return reject(new Error('rete non supportata'));
+      const key = (t.src || 'sdk') + ':' + t.zone;
+      if (adSdkKey === key) return resolve();
+      if (t.zone && typeof window[t.fn] === 'function') return resolve();
       const s = document.createElement('script');
       s.async = true;
-      s.src = 'https://libtl.com/sdk.js';
-      s.setAttribute('data-zone', zone);
-      s.setAttribute('data-sdk', 'show_' + zone);
+      s.src = t.src || 'https://libtl.com/sdk.js';
+      if (t.zone) { s.setAttribute('data-zone', t.zone); s.setAttribute('data-sdk', t.fn || ('show_' + t.zone)); }
       s.onload = () => { adSdkKey = key; resolve(); };
-      s.onerror = () => reject(new Error('SDK annunci non raggiungibile'));
+      s.onerror = () => reject(new Error('tag Monetag non raggiungibile'));
       document.head.appendChild(s);
     });
   }
 
+  function grantReward(onDone) {
+    takeAd();
+    P.coins += 50; saveProfile(); renderHUD();
+    G.audio.sfx('coin');
+    toast('+50 monete ★');
+    if (onDone) onDone();
+  }
+
   // resolve solo se l'annuncio è stato visto (e, se la rete lo dice, premiato)
   function realRewarded() {
-    const a = P.ads || {};
-    const zone = String(a.zone || '').trim();
-    const fn = String(a.fn || '').trim() || ('show_' + zone);
-    if (!zone && !String(a.fn || '').trim()) return Promise.reject(new Error('manca l\'ID zona'));
-    return loadAdSdk(a.net, zone).then(() => new Promise((resolve, reject) => {
-      const f = window[fn];
-      if (typeof f !== 'function') return reject(new Error('funzione ' + fn + ' non trovata'));
+    const t = parseAdTag();
+    if (!t) return Promise.reject(new Error('incolla il tag Monetag in Impostazioni'));
+    if (t.url) return Promise.reject(new Error('link diretto gestito a parte'));
+    if (!t.zone) return Promise.reject(new Error('tag Monetag non riconosciuto'));
+    return loadAdSdk(t).then(() => new Promise((resolve, reject) => {
+      const f = window[t.fn] || window['show_' + t.zone];
+      if (typeof f !== 'function') return reject(new Error('funzione ' + t.fn + ' non trovata nel tag'));
       let done = false;
       const stop = (ok, e) => { if (done) return; done = true; ok ? resolve() : reject(e); };
       try {
         const r = f();
         if (r && typeof r.then === 'function') {
           r.then(res => {
-            const t = res && res.reward_event_type;
-            if (!t || t === 'valued') stop(true);
+            const ty = res && res.reward_event_type;
+            if (!ty || ty === 'valued') stop(true);
             else stop(false, new Error('annuncio non premiato'));
           }).catch(e => stop(false, e));
         } else stop(true);
@@ -345,19 +377,49 @@
   }
 
   function playRealAd(onDone) {
+    const t = parseAdTag();
+    if (t && t.url) {
+      // zona Direct link: apro l'annuncio in una nuova scheda, premio al rientro nel gioco
+      const ov = adWaitOverlay('Guarda l\'annuncio Monetag');
+      const foot = el('div', 'adFoot');
+      foot.style.marginTop = '10px';
+      foot.style.display = 'flex';
+      foot.style.gap = '8px';
+      foot.style.flexWrap = 'wrap';
+      const openB = el('a', 'btn gold', 'APRI L\'ANNUNCIO ↗');
+      openB.href = t.url; openB.target = '_blank'; openB.rel = 'noopener';
+      openB.style.textAlign = 'center';
+      const done = el('button', 'btn dark', 'ASPETTA 5s…');
+      done.disabled = true;
+      let awarded = false;
+      const finish = ok => {
+        if (awarded) return;
+        awarded = true;
+        clearInterval(tick);
+        closeAdOverlay();
+        if (ok) grantReward(onDone);
+        else toast('Annuncio non completato');
+      };
+      done.onclick = () => finish(true);
+      foot.appendChild(openB);
+      foot.appendChild(done);
+      ov.querySelector('.adBox').appendChild(foot);
+      const t0 = Date.now();
+      const tick = setInterval(() => {
+        const dt = Date.now() - t0;
+        if (done.disabled && dt > 5000) { done.disabled = false; done.className = 'btn gold'; done.textContent = 'HO VISTO · +50 ★'; }
+        if (document.visibilityState === 'visible' && document.hasFocus() && dt > 5000) finish(true);
+        else if (dt > 180000) finish(false);
+      }, 500);
+      return;
+    }
     adWaitOverlay('Carico l\'annuncio');
-    realRewarded().then(() => {
-      takeAd();
-      P.coins += 50; saveProfile(); renderHUD();
-      G.audio.sfx('coin');
-      closeAdOverlay();
-      toast('+50 monete ★');
-      if (onDone) onDone();
-    }).catch(err => {
-      closeAdOverlay();
-      G.audio.sfx('error');
-      toast('Annuncio non disponibile: ' + ((err && err.message) || 'riprova'));
-    });
+    realRewarded().then(() => { closeAdOverlay(); grantReward(onDone); })
+      .catch(err => {
+        closeAdOverlay();
+        G.audio.sfx('error');
+        toast('Annuncio non disponibile: ' + ((err && err.message) || 'riprova'));
+      });
   }
 
   function playAd(country, ad, onDone) {
@@ -401,7 +463,7 @@
 
   function pageAds() {
     page('MONETE EXTRA', body => {
-      const country = adCountry();
+      const country = adLang();
       const card = el('div', 'card');
       card.innerHTML = '<h3>VIDEO PREMIO · ' + country + '</h3>' +
         '<p class="hint">Guarda una pubblicità del tuo paese e ricevi <b style="color:#ffd24a">50 monete</b>. Puoi guardare al massimo <b>' + ADS_PER_DAY + ' video al giorno</b>: quando finiscono devi aspettare domani.</p>';
@@ -411,8 +473,8 @@
       card.appendChild(pips); card.appendChild(btn); card.appendChild(note);
       body.appendChild(card);
       body.appendChild(el('p', 'hint', adsReal()
-        ? 'Annunci reali attivi (' + (P.ads.net === 'monetag' ? 'Monetag' : P.ads.net) + '): il premio arriva solo dopo aver visto il video.'
-        : 'Pubblicità simulata: per mostrare annunci veri collega la rete in Impostazioni → ANNUNCI.'));
+        ? 'Annunci Monetag attivi: le monete arrivano solo dopo aver visto l\'annuncio.'
+        : 'Pubblicità di prova: incolla il tag Monetag in Impostazioni → ANNUNCI MONETAG per gli annunci veri.'));
 
       const draw = () => {
         const left = adsLeft();
@@ -642,47 +704,51 @@
       body.appendChild(card3);
 
       const cardA = el('div', 'card');
-      cardA.innerHTML = '<h3>ANNUNCI (+50)</h3><p class="hint">Per mostrare pubblicità vere serve una rete che approva il sito. Passi: crea un account publisher (per esempio <b>Monetag</b>), aggiungi e verifica il dominio del gioco, crea una zona <b>Rewarded Interstitial</b> e incolla qui l\'ID zona. Finché non è configurata resta la pubblicità simulata.</p>';
-      const netRow = el('div', 'row');
-      const netB = el('button', 'btn dark', '');
-      const paintNet = () => {
-        netB.className = 'btn ' + (P.ads.net === 'monetag' ? 'green' : 'dark');
-        netB.textContent = P.ads.net === 'monetag' ? 'RETE: MONETAG' : 'RETE: NESSUNA (simulata)';
-      };
-      netB.onclick = () => { P.ads.net = P.ads.net === 'monetag' ? 'none' : 'monetag'; paintNet(); G.audio.sfx('click'); };
-      paintNet();
-      netRow.appendChild(netB);
-
-      const zoneIn = el('input', 'nameInput');
-      zoneIn.type = 'text'; zoneIn.maxLength = 24; zoneIn.value = P.ads.zone || '';
-      zoneIn.placeholder = 'ID zona annuncio'; zoneIn.setAttribute('aria-label', 'ID zona annuncio');
-      const fnIn = el('input', 'nameInput');
-      fnIn.type = 'text'; fnIn.maxLength = 40; fnIn.value = P.ads.fn || '';
-      fnIn.placeholder = 'funzione JS (opzionale)'; fnIn.setAttribute('aria-label', 'Funzione annuncio');
+      cardA.innerHTML = '<h3>ANNUNCI MONETAG (+50)</h3>' +
+        '<p class="hint"><b>1.</b> Su <b>monetag.com</b> crea l\'account publisher e aggiungi il sito <b>gattoita-lab.github.io</b> (verifica col meta tag: incollalo a me oppure in <code>index.html</code>).<br>' +
+        '<b>2.</b> <b>Add zone</b> → crea una zona <b>Direct link</b> (o Vignette) per il sito.<br>' +
+        '<b>3.</b> Copia il <b>tag completo</b> che ti danno (o il link) e incollalo qui sotto, poi SALVA TAG.<br>' +
+        'Da quel momento ogni +50 apre un annuncio Monetag vero e le monete arrivano solo quando l\'annuncio è stato visto.</p>';
+      const tagIn = el('textarea', 'nameInput');
+      tagIn.rows = 3;
+      tagIn.value = P.ads.tag || '';
+      tagIn.placeholder = '<script ... data-zone="1234567"></script>  oppure  https://...';
+      tagIn.setAttribute('aria-label', 'Tag Monetag');
       const stat = el('p', 'hint', '');
       const paintStat = () => {
-        stat.textContent = adsReal()
-          ? 'Configurato: ' + P.ads.net + (P.ads.zone ? ' · zona ' + P.ads.zone : '') + (P.ads.fn ? ' · funzione ' + P.ads.fn : '')
-          : 'Annunci simulati: nessuna rete collegata.';
+        const t = parseAdTag();
+        const lg = (P.ads.lang || 'auto') === 'auto' ? 'automatica' : (P.ads.lang === 'it' ? 'italiano' : 'inglese');
+        stat.textContent = t
+          ? 'Monetag attivo: ' + (t.url ? 'link diretto' : (t.zone ? 'zona ' + t.zone + ' · ' + t.fn : 'tag pronto')) + ' · lingua annunci ' + lg
+          : 'Nessun tag Monetag: per ora +50 mostra un annuncio di prova.';
       };
-      const saveA = el('button', 'btn gold', 'SALVA ANNUNCI');
+      const langRow = el('div', 'row');
+      const langBtns = {};
+      const paintLang = () => {
+        Object.keys(langBtns).forEach(k => { langBtns[k].className = 'btn ' + ((P.ads.lang || 'auto') === k ? 'green' : 'dark'); });
+      };
+      [['auto', 'AUTO'], ['it', 'ITALIANO'], ['en', 'ENGLISH']].forEach(pair => {
+        const b = el('button', 'btn dark', pair[1]);
+        b.onclick = () => { P.ads.lang = pair[0]; saveProfile(); paintLang(); paintStat(); G.audio.sfx('click'); };
+        langBtns[pair[0]] = b; langRow.appendChild(b);
+      });
+      paintLang();
+      const saveA = el('button', 'btn gold', 'SALVA TAG');
       saveA.onclick = () => {
-        P.ads.zone = zoneIn.value.trim(); P.ads.fn = fnIn.value.trim();
-        saveProfile(); paintStat(); paintNet(); G.audio.sfx('click');
-        toast(adsReal() ? 'Annunci reali impostati' : 'Annunci simulati');
+        P.ads.tag = tagIn.value.trim();
+        saveProfile(); paintStat(); G.audio.sfx('click');
+        toast(parseAdTag() ? 'Tag Monetag salvato' : 'Tag vuoto: annunci di prova');
       };
       const testA = el('button', 'btn dark', 'PROVA');
       testA.onclick = () => {
-        if (!adsReal()) { toast('Prima configura rete e ID zona'); return; }
+        if (!adsReal()) { toast('Prima incolla il tag Monetag'); return; }
         adWaitOverlay('Provo l\'annuncio');
-        realRewarded().then(() => { closeAdOverlay(); toast('Annuncio caricato e chiuso'); })
+        realRewarded().then(() => { closeAdOverlay(); toast('Annuncio mostrato'); })
           .catch(e => { closeAdOverlay(); toast('Errore: ' + ((e && e.message) || e)); });
       };
-      const aRow = el('div', 'row');
-      aRow.appendChild(zoneIn); aRow.appendChild(fnIn);
       const aRow2 = el('div', 'row');
       aRow2.appendChild(saveA); aRow2.appendChild(testA);
-      cardA.appendChild(netRow); cardA.appendChild(aRow); cardA.appendChild(aRow2); cardA.appendChild(stat);
+      cardA.appendChild(tagIn); cardA.appendChild(langRow); cardA.appendChild(aRow2); cardA.appendChild(stat);
       paintStat();
       body.appendChild(cardA);
 
