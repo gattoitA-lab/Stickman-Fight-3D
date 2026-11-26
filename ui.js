@@ -816,10 +816,13 @@
         applyTouch(); G.audio.sfx('click'); pageSettings();
       };
       cardT.appendChild(resetTouch);
+      const moveCtrl = el('button', 'btn gold', '✥ SPOSTA COMANDI');
+      moveCtrl.onclick = () => openCtrlPrev();
+      cardT.appendChild(moveCtrl);
       const posReset = el('button', 'btn dark', '↺ POSIZIONI DEI PULSANTI');
       posReset.onclick = () => { resetCtrlPos(); toast('Pulsanti tornati al posto di partenza'); };
       cardT.appendChild(posReset);
-      cardT.appendChild(el('p', 'hint', 'Per spostare i singoli pulsanti (levetta, ⚔, ✦, ⤓, ↑) uno per uno: durante una partita apri la pausa e tocca ✥ SPOSTA COMANDI. Trascini ogni comando col dito: la posizione resta salvata sul dispositivo.'));
+      cardT.appendChild(el('p', 'hint', 'Per spostare i singoli pulsanti (levetta, ⚔, ✦, ⤓, ↑) uno per uno: tocca ✥ SPOSTA COMANDI qui sopra e trascina ogni comando dove vuoi, oppure fallo in partita dalla pausa. Le posizioni restano salvate sul dispositivo.'));
       body.appendChild(cardT);
 
       const card4 = el('div', 'card');
@@ -1710,8 +1713,9 @@
     };
   }
 
-  function startCtrlEdit() {
-    const layer = $('#touchLayer');
+  // editor dei comandi: gira su un contenitore qualsiasi con [data-seat] (partita o anteprima nelle Impostazioni)
+  function startCtrlEdit(layer, opts) {
+    const o = opts || {};
     if (ctrlEdit || !layer || !layer.querySelector('[data-seat]')) return;
     let drag = null;
 
@@ -1753,17 +1757,36 @@
     bar.appendChild(done);
     bar.appendChild(reset);
     document.body.appendChild(bar);
-    ctrlEdit = { layer, bar, down, move, up };
+    ctrlEdit = { layer, bar, down, move, up, onStop: o.onStop };
     layer.classList.add('editing');
     layer.addEventListener('pointerdown', down, true);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
     $('#pauseOverlay').classList.remove('on');
-    done.onclick = () => { saveCtrlPos(); stopCtrlEdit(); };
-    reset.onclick = () => { drag = null; resetCtrlPos(); };
+    done.onclick = () => { saveCtrlPos(layer); stopCtrlEdit(); };
+    reset.onclick = () => { drag = null; if (o.onReset) o.onReset(); else resetCtrlPos(); };
     G.audio.sfx('buy');
     toast('Trascina i comandi, poi FINE');
+  }
+
+  // anteprima nelle Impostazioni: un pannello fisso con gli stessi comandi, da sistemare senza partita
+  function openCtrlPrev() {
+    if (ctrlEdit) return;
+    const prev = el('div', 'ctrlLayer solo ctrlPrev');
+    prev.style.setProperty('--sz', P.touch.sz);
+    prev.style.setProperty('--lift', (P.touch.lift || 0) + 'px');
+    prev.classList.toggle('lefty', P.touch.hand === 'left');
+    const fill = () => {
+      prev.innerHTML = '<div class="ctrl" data-slot="0">' + G.engine.ctrlMarkup() + '</div>';
+      G.engine.applyFreePos(prev);
+    };
+    fill();
+    document.body.appendChild(prev);
+    startCtrlEdit(prev, {
+      onReset: () => { resetCtrlPos(); fill(); },
+      onStop: () => prev.remove()
+    });
   }
 
   function resetCtrlPos() {
@@ -1773,8 +1796,7 @@
   }
 
   // salva dove sono i comandi: chi c'è sullo schermo vale così com'è, chi manca (es. salto spento) tiene la sua posizione
-  function saveCtrlPos() {
-    const layer = $('#touchLayer');
+  function saveCtrlPos(layer) {
     if (!layer) return;
     const pos = Object.assign({}, P.touch.pos);
     layer.querySelectorAll('[data-seat]').forEach(n => {
@@ -1790,7 +1812,7 @@
 
   function stopCtrlEdit() {
     if (!ctrlEdit) return;
-    const { layer, bar, down, move, up } = ctrlEdit;
+    const { layer, bar, down, move, up, onStop } = ctrlEdit;
     ctrlEdit = null;
     layer.removeEventListener('pointerdown', down, true);
     window.removeEventListener('pointermove', move);
@@ -1798,6 +1820,7 @@
     window.removeEventListener('pointercancel', up);
     layer.classList.remove('editing');
     bar.remove();
+    if (onStop) onStop();
     if (G.engine.isPlaying() && G.engine.isPaused()) $('#pauseOverlay').classList.add('on');
   }
 
@@ -1849,7 +1872,7 @@
     if (moveBtn) moveBtn.onclick = () => {
       if (!G.engine.isPlaying()) { toast('Avvia una partita, poi metti in pausa'); return; }
       if (!G.engine.isPaused()) G.engine.pause(true);
-      startCtrlEdit();
+      startCtrlEdit($('#touchLayer'));
     };
     $('#btnQuit').onclick = () => { stopNet(); G.engine.quit(); home(); };
     $('#pauseBtn').onclick = () => requestPauseToggle();

@@ -1214,6 +1214,7 @@
     if (onPauseChange) onPauseChange(paused);
   };
   E.togglePause = function () { E.pause(!paused); };
+  E.applyFreePos = applyFreePos;
   E.isPaused = () => paused;
   E.isPlaying = () => active && running;
   E.quit = function () {
@@ -1323,6 +1324,18 @@
   E.setPauseHandler = fn => { onPauseChange = fn; E.onPauseChange = fn; };
 
   /* ---------------- touch ---------------- */
+  // mark-up dei comandi: lo usa la partita e anche l'anteprima nelle Impostazioni
+  function ctrlMarkup() {
+    return '<div class="stick" data-seat="stick"><div class="ring"></div><div class="knob"></div></div>' +
+      '<div class="acts">' +
+      '<button class="ab atk" data-seat="atk" aria-label="Attacco">⚔</button>' +
+      '<button class="ab abi" data-seat="abi" aria-label="Abilità">✦<span class="cd"></span></button>' +
+      '<button class="ab drop" data-seat="drop" aria-label="Lascia l\'arma">⤓</button>' +
+      (uiP.jump ? '<button class="ab jmp" data-seat="jmp" aria-label="Salto">↑</button>' : '') +
+      '</div>';
+  }
+  E.ctrlMarkup = ctrlMarkup;
+
   function buildTouch() {
     if (!tLayer) return;
     tLayer.innerHTML = '';
@@ -1332,14 +1345,7 @@
       el.className = 'ctrl';
       el.dataset.slot = i;
       el.style.setProperty('--c', f.color);
-      el.      innerHTML =
-        '<div class="stick" data-seat="stick"><div class="ring"></div><div class="knob"></div></div>' +
-        '<div class="acts">' +
-        '<button class="ab atk" data-seat="atk" aria-label="Attacco">⚔</button>' +
-        '<button class="ab abi" data-seat="abi" aria-label="Abilità">✦<span class="cd"></span></button>' +
-        '<button class="ab drop" data-seat="drop" aria-label="Lascia l\'arma">⤓</button>' +
-        (uiP.jump ? '<button class="ab jmp" data-seat="jmp" aria-label="Salto">↑</button>' : '') +
-        '</div>';
+      el.innerHTML = ctrlMarkup();
       tLayer.appendChild(el);
       applyFreePos(el);
       const stick = el.querySelector('.stick');

@@ -203,7 +203,7 @@ body.gaming #fs{opacity:.35}
 #c{width:min(100vw,calc(100dvh * 16 / 9));height:auto;max-height:100dvh;display:block;touch-action:none}
 .topBtns{position:absolute;z-index:12;top:calc(6px + env(safe-area-inset-top));left:calc(6px + env(safe-area-inset-left));display:flex;gap:6px}
 .gbtn{width:38px;height:38px;border-radius:11px;background:rgba(6,16,32,.78);border:2px solid #2a4a7a;display:grid;place-items:center;font-size:16px;color:#dce8ff;backdrop-filter:blur(4px)}
-#touchLayer{position:absolute;inset:0;z-index:10;pointer-events:none;--sz:1;--lift:0px}
+.ctrlLayer{position:absolute;inset:0;z-index:10;pointer-events:none;--sz:1;--lift:0px}
 .ctrl{position:absolute;display:flex;align-items:flex-end;gap:6px;pointer-events:none}
 .ctrl .stick{width:calc(clamp(76px,15vmin,116px) * var(--sz,1));height:calc(clamp(76px,15vmin,116px) * var(--sz,1));border-radius:50%;background:rgba(255,255,255,.07);border:3px solid rgba(255,255,255,.32);position:relative;pointer-events:auto;touch-action:none;backdrop-filter:blur(2px)}
 .ctrl .stick .ring{position:absolute;inset:6px;border-radius:50%;border:2px dashed rgba(255,255,255,.18)}
@@ -217,8 +217,8 @@ body.gaming #fs{opacity:.35}
 .ctrl .ab.drop:active{filter:brightness(1.1)}
 .ctrl .ab:active{filter:brightness(1.25)}
 .ctrl[data-slot="0"]{left:calc(8px + env(safe-area-inset-left));bottom:calc(8px + env(safe-area-inset-bottom) + var(--lift,0px))}
-#touchLayer.solo .ctrl[data-slot="0"] .acts{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom) + var(--lift,0px));flex-direction:row;align-items:flex-end;gap:10px;pointer-events:none}
-#touchLayer.solo .ctrl[data-slot="0"] .ab{width:calc(clamp(56px,11vmin,78px) * var(--sz,1));height:calc(clamp(56px,11vmin,78px) * var(--sz,1))}
+.ctrlLayer.solo .ctrl[data-slot="0"] .acts{position:fixed;right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom) + var(--lift,0px));flex-direction:row;align-items:flex-end;gap:10px;pointer-events:none}
+.ctrlLayer.solo .ctrl[data-slot="0"] .ab{width:calc(clamp(56px,11vmin,78px) * var(--sz,1));height:calc(clamp(56px,11vmin,78px) * var(--sz,1))}
 .ctrl[data-slot="1"]{right:calc(8px + env(safe-area-inset-right));bottom:calc(8px + env(safe-area-inset-bottom) + var(--lift,0px))}
 .ctrl[data-slot="1"] .acts{order:-1}
 .ctrl[data-slot="2"]{left:calc(8px + env(safe-area-inset-left));top:calc(46px + env(safe-area-inset-top) - var(--lift,0px))}
@@ -226,9 +226,9 @@ body.gaming #fs{opacity:.35}
 .ctrl[data-slot="3"] .acts{order:-1}
 .ctrl .ab.jmp{background:rgba(76,201,255,.92);color:#04121f}
 /* mancino: levetta a destra, tasti a sinistra */
-#touchLayer.lefty .ctrl[data-slot="0"]{left:auto;right:calc(8px + env(safe-area-inset-right))}
-#touchLayer.lefty .ctrl[data-slot="1"]{right:auto;left:calc(8px + env(safe-area-inset-left))}
-#touchLayer.lefty.solo .ctrl[data-slot="0"] .acts{right:auto;left:calc(14px + env(safe-area-inset-left))}
+.ctrlLayer.lefty .ctrl[data-slot="0"]{left:auto;right:calc(8px + env(safe-area-inset-right))}
+.ctrlLayer.lefty .ctrl[data-slot="1"]{right:auto;left:calc(8px + env(safe-area-inset-left))}
+.ctrlLayer.lefty.solo .ctrl[data-slot="0"] .acts{right:auto;left:calc(14px + env(safe-area-inset-left))}
 .sliderRow{display:flex;align-items:center;gap:10px;justify-content:space-between;color:#b6c9ea;font:700 13px var(--font);margin:4px 0}
 .sliderRow input[type=range]{flex:1 1 auto;min-width:90px;accent-color:#4cc9ff}
 .sliderRow b{color:#fff;min-width:52px;text-align:right}
@@ -462,9 +462,10 @@ button.tap{animation:btnTap .34s ease}
 }
 
 /* comandi trascinabili: ogni pulsante può stare dove vuoi */
+.ctrlPrev{position:fixed;inset:0;z-index:130;background:rgba(4,10,20,.94)}
 .ctrl .stick.freePos, .ctrl .ab.freePos{position:fixed !important;transform:translate(-50%,-50%);margin:0;z-index:12}
-#touchLayer.editing{pointer-events:auto}
-#touchLayer.editing .stick, #touchLayer.editing .ab{outline:3px dashed rgba(255,210,74,.9);outline-offset:2px;cursor:grab;touch-action:none}
-#touchLayer.editing .stick:active, #touchLayer.editing .ab:active{cursor:grabbing;filter:brightness(1.15)}
+.ctrlLayer.editing{pointer-events:auto}
+.ctrlLayer.editing .stick, .ctrlLayer.editing .ab{outline:3px dashed rgba(255,210,74,.9);outline-offset:2px;cursor:grab;touch-action:none}
+.ctrlLayer.editing .stick:active, .ctrlLayer.editing .ab:active{cursor:grabbing;filter:brightness(1.15)}
 .ctrlEditBar{position:fixed;left:0;right:0;top:0;z-index:135;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px;background:rgba(4,12,20,.94);color:#e9fff1;font:700 13px system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .ctrlEditBar .btn{padding:8px 14px;font-size:13px}
