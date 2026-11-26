@@ -703,13 +703,13 @@
         if (!G.engine.isPlaying()) return;
         const i = G.engine.getInput(slot);
         if (i) room.sendInput(i);
-      }, 50);
+      }, 40);
       netTimers.push(inputTimer);
     } else {
       const snapTimer = setInterval(() => {
         if (!G.engine.isPlaying()) return;
         room.broadcast({ t: 'st', s: G.engine.netSnapshot() });
-      }, 100);
+      }, 60);
       netTimers.push(snapTimer);
     }
   }

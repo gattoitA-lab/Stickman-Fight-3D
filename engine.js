@@ -25,7 +25,7 @@
   let keys = {}, humans = [], last = 0, ac = null, soundOn = true, spawnOverride = null, rafId = 0;
   let onEnd = null, onPauseChange = null;
   let remoteIn = [], netLocalSlot = null, padPrev = [];
-  let randomMaps = false, specF = null;
+  let randomMaps = false, specF = null, netGT = null;
 
   /* ---------------- utils ---------------- */
   const foe = (a, b) => a.team !== b.team;
@@ -877,14 +877,17 @@
       plats.push({ x: edge, y, w: worldW - edge * 2 });
     }
     (map.plats || []).forEach(p => plats.push({ x: p.x * sx, y: p.y, w: p.w * sx }));
-    (map.movers || []).forEach(m => plats.push({ x: m.x * sx, y: m.y, w: m.w * sx, mover: { axis: m.axis, amp: (m.amp || 0) * sx, sp: m.sp, baseX: m.x * sx, baseY: m.y, t: Math.random() * 6, dx: 0, dy: 0 } }));
+    // fase iniziale deterministica: host e ospiti devono vedere le piattaforme nello stesso punto
+    const mapSeed = String(map.id || '').split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 9973, 7);
+    const moverPhase = i => ((mapSeed * (i + 3)) % 600) / 100;
+    (map.movers || []).forEach((m, i) => plats.push({ x: m.x * sx, y: m.y, w: m.w * sx, mover: { axis: m.axis, amp: (m.amp || 0) * sx, sp: m.sp, baseX: m.x * sx, baseY: m.y, t: moverPhase(i), t0: moverPhase(i), dx: 0, dy: 0 } }));
     // piattaforme volanti: ogni livello senza mover ne riceve una orizzontale e una verticale
     if (!(map.movers || []).length) {
       const auto = [
         { x: worldW * .17, y: worldH * .54, w: 112, axis: 'x', amp: Math.min(150, worldW * .1), sp: .4 },
         { x: worldW * .63, y: worldH * .36, w: 104, axis: 'y', amp: 58, sp: .5 }
       ];
-      auto.forEach(m => plats.push({ x: m.x, y: m.y, w: m.w, mover: { axis: m.axis, amp: m.amp, sp: m.sp, baseX: m.x, baseY: m.y, t: Math.random() * 6, dx: 0, dy: 0 } }));
+      auto.forEach((m, i) => plats.push({ x: m.x, y: m.y, w: m.w, mover: { axis: m.axis, amp: m.amp, sp: m.sp, baseX: m.x, baseY: m.y, t: moverPhase(i), t0: moverPhase(i), dx: 0, dy: 0 } }));
     }
     bgStyle = ({
       dojo: 'forest', jurassic: 'forest', castle: 'forest', werewolf: 'forest', guardian: 'forest',
@@ -935,7 +938,7 @@
     mapDef = cfg.map || G.MAPS[0];
     buildMap(mapDef);
     F = []; projs = []; parts = []; rings = []; floats = []; beams = []; targets = [];
-    pickups = []; pickupT = 1.2; skyW = !!cfg.skyWeapons;
+    pickups = []; pickupT = 1.2; skyW = !!cfg.skyWeapons; netGT = null;
     wins = {}; round = 1; wave = 0; waveDelay = 0; wavePending = false; score = 0; kills = 0;
     endSent = false; paused = false; state = 'intro'; introT = 1.25; lock = true; banner = 'ROUND 1'; bannerSub = ''; bannerT = 1.3;
     slowT = 0; shake = 0; flash = 0; gravityMod = 1; gravT = 0; gameT = 0;
@@ -1232,6 +1235,7 @@
     return {
       state: state, round: round, time: timeLeft,
       banner: banner, bannerSub: bannerSub, bannerT: bannerT,
+      gt: Math.round(gameT * 100) / 100,
       f: F.map(f => ({
         x: Math.round(f.x * 10) / 10, y: Math.round(f.y * 10) / 10,
         vx: Math.round(f.vx), vy: Math.round(f.vy),
@@ -1249,6 +1253,7 @@
     timeLeft = s.time != null ? s.time : timeLeft;
     banner = s.banner || banner; bannerSub = s.bannerSub || '';
     if (s.bannerT != null) bannerT = s.bannerT;
+    if (s.gt != null) netGT = s.gt;
     for (let i = 0; i < s.f.length && i < F.length; i++) F[i].net = s.f[i];
     // le armi a terra arrivano dall'host: il client non simula i bottini
     if (s.pk) pickups = s.pk.map(p => ({ id: p.id, x: p.x, y: p.y, vy: 0, spin: 0, landed: true, dead: false }));
@@ -1427,7 +1432,21 @@
   }
 
   function stepNetClient(dt) {
-    gameT += dt;
+    // le piattaforme mobili devono muoversi anche a casa dell'ospite
+    updateMovers(dt);
+    if (netGT != null) {
+      // riallineamento morbido con la fase dell'host, solo se sono fuori posto
+      let fix = false;
+      for (const p of plats) {
+        const m = p.mover;
+        if (!m) continue;
+        const target = (m.t0 || 0) + netGT * m.sp;
+        let dd = (m.t - target) % TAU;
+        if (dd > Math.PI) dd -= TAU; else if (dd < -Math.PI) dd += TAU;
+        if (Math.abs(dd) * Math.abs(m.amp) > 26) { m.t = target; fix = true; }
+      }
+      if (fix) updateMovers(0);
+    }
     if (bannerT > 0) bannerT -= dt;
     if (slowT > 0) slowT -= dt * 2;
     // il client non simula la fisica ma deve comunque leggere i comandi locali
@@ -1440,7 +1459,7 @@
     for (const f of F) {
       const t = f.net;
       if (t) {
-        const k = Math.min(1, 14 * dt);
+        const k = Math.min(1, 22 * dt);
         f.x += (t.x - f.x) * k;
         f.y += (t.y - f.y) * k;
         f.vx = t.vx || 0; f.vy = t.vy || 0;
