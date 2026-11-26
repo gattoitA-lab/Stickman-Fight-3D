@@ -27,7 +27,21 @@
   let remoteIn = [], netLocalSlot = null, padPrev = [];
   let randomMaps = false, specF = null, netGT = null;
   // preferenze dei comandi su schermo (impostazioni)
-  let uiP = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0 };
+  let uiP = { sz: 1, jump: false, rel: 'abi', hand: 'right', lift: 0, pos: {} };
+
+  // posizioni libere dei comandi (percentuali dello schermo), salvate nel profilo
+  function applyFreePos(root) {
+    const map = { stick: '.stick', atk: '.ab.atk', abi: '.ab.abi', drop: '.ab.drop', jmp: '.ab.jmp' };
+    Object.keys(map).forEach(k => {
+      const p = uiP.pos && uiP.pos[k];
+      if (!p) return;
+      const node = root.querySelector(map[k]);
+      if (!node) return;
+      node.classList.add('freePos');
+      node.style.left = p.x + '%';
+      node.style.top = p.y + '%';
+    });
+  }
 
   /* ---------------- utils ---------------- */
   const foe = (a, b) => a.team !== b.team;
@@ -1328,6 +1342,7 @@
         (uiP.jump ? '<button class="ab jmp" aria-label="Salto">↑</button>' : '') +
         '</div>';
       tLayer.appendChild(el);
+      applyFreePos(el);
       const stick = el.querySelector('.stick');
       const knob = el.querySelector('.knob');
       const cd = el.querySelector('.cd');

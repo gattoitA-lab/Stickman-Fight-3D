@@ -460,3 +460,11 @@ button.tap{animation:btnTap .34s ease}
 @media (prefers-reduced-motion:reduce){
   .adScene:before,.adIco{animation:none!important}
 }
+
+/* comandi trascinabili: ogni pulsante può stare dove vuoi */
+.ctrl .stick.freePos, .ctrl .ab.freePos{position:fixed !important;transform:translate(-50%,-50%);margin:0;z-index:12}
+#touchLayer.editing{pointer-events:auto}
+#touchLayer.editing .stick, #touchLayer.editing .ab{outline:3px dashed rgba(255,210,74,.9);outline-offset:2px;cursor:grab;touch-action:none}
+#touchLayer.editing .stick:active, #touchLayer.editing .ab:active{cursor:grabbing;filter:brightness(1.15)}
+.ctrlEditBar{position:fixed;left:0;right:0;top:0;z-index:135;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px;background:rgba(4,12,20,.94);color:#e9fff1;font:700 13px system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.ctrlEditBar .btn{padding:8px 14px;font-size:13px}

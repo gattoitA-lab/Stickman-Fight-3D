@@ -815,6 +815,13 @@
         applyTouch(); G.audio.sfx('click'); pageSettings();
       };
       cardT.appendChild(resetTouch);
+      const posReset = el('button', 'btn dark', '↺ POSIZIONI DEI PULSANTI');
+      posReset.onclick = () => {
+        P.touch.pos = {}; saveProfile(); G.engine.setUiPrefs(P.touch);
+        G.audio.sfx('click'); toast('Pulsanti tornati al posto di partenza');
+      };
+      cardT.appendChild(posReset);
+      cardT.appendChild(el('p', 'hint', 'Per spostare i singoli pulsanti (levetta, ⚔, ✦, ⤓, ↑) uno per uno: durante una partita apri la pausa e tocca ✥ SPOSTA COMANDI. Trascini ogni comando col dito: la posizione resta salvata sul dispositivo.'));
       body.appendChild(cardT);
 
       const card4 = el('div', 'card');
@@ -1690,6 +1697,88 @@
     toast('+50 monete ★ annuncio completato');
   }
 
+  /* --- spostare i comandi col dito, uno per uno --- */
+  let ctrlEdit = null;
+
+  function startCtrlEdit() {
+    const layer = document.getElementById('touchLayer');
+    if (!layer || ctrlEdit) return;
+    const pauseOv = $('#pauseOverlay');
+    const down = ev => {
+      const node = ev.target.closest('.stick, .ab');
+      if (!node) return;
+      ev.preventDefault(); ev.stopPropagation();
+      const r = node.getBoundingClientRect();
+      const ox = ev.clientX - (r.left + r.width / 2);
+      const oy = ev.clientY - (r.top + r.height / 2);
+      const move = e2 => {
+        const x = (e2.clientX - ox) / window.innerWidth * 100;
+        const y = (e2.clientY - oy) / window.innerHeight * 100;
+        node.classList.add('freePos');
+        node.style.left = Math.max(4, Math.min(96, x)) + '%';
+        node.style.top = Math.max(4, Math.min(96, y)) + '%';
+      };
+      move(ev);
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        G.audio.sfx('click');
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    };
+    const bar = el('div', 'ctrlEditBar');
+    const done = el('button', 'btn gold', 'FINE');
+    const reset = el('button', 'btn dark', '↺ DEFAULT');
+    bar.appendChild(el('span', '', '✥ Trascina ogni comando dove vuoi'));
+    bar.appendChild(done);
+    bar.appendChild(reset);
+    document.body.appendChild(bar);
+    if (pauseOv) pauseOv.classList.remove('on');
+    layer.classList.add('editing');
+    layer.addEventListener('pointerdown', down, true);
+    ctrlEdit = { layer, bar, down };
+    done.onclick = () => { saveCtrlPos(); stopCtrlEdit(); };
+    reset.onclick = () => {
+      layer.querySelectorAll('.freePos').forEach(n => {
+        n.classList.remove('freePos'); n.style.left = ''; n.style.top = '';
+      });
+      G.audio.sfx('click');
+    };
+    G.audio.sfx('buy');
+    toast('Trascina i comandi, poi FINE');
+  }
+
+  function saveCtrlPos() {
+    const layer = document.getElementById('touchLayer');
+    if (!layer) return;
+    const map = { stick: '.stick', atk: '.ab.atk', abi: '.ab.abi', drop: '.ab.drop', jmp: '.ab.jmp' };
+    const pos = {};
+    Object.keys(map).forEach(k => {
+      const n = layer.querySelector(map[k]);
+      if (!n || !n.classList.contains('freePos')) return;
+      const r = n.getBoundingClientRect();
+      pos[k] = {
+        x: +(((r.left + r.width / 2) / window.innerWidth) * 100).toFixed(2),
+        y: +(((r.top + r.height / 2) / window.innerHeight) * 100).toFixed(2)
+      };
+    });
+    P.touch.pos = pos;
+    saveProfile();
+    G.engine.setUiPrefs(P.touch);
+  }
+
+  function stopCtrlEdit() {
+    if (!ctrlEdit) return;
+    ctrlEdit.layer.removeEventListener('pointerdown', ctrlEdit.down, true);
+    ctrlEdit.layer.classList.remove('editing');
+    ctrlEdit.bar.remove();
+    ctrlEdit = null;
+    const pauseOv = $('#pauseOverlay');
+    if (pauseOv && G.engine.isPlaying()) pauseOv.classList.add('on');
+    G.audio.sfx('click');
+  }
+
   /* ---------------- init ---------------- */
   function init() {
     G.engine.init({ canvas: $('#c'), touch: $('#touchLayer') });
@@ -1734,6 +1823,12 @@
 
     $('#btnResume').onclick = () => { if (netSession) requestPauseToggle(); else G.engine.pause(false); };
     $('#btnRestart').onclick = () => { if (lastConfig) launch(lastConfig); };
+    const moveBtn = $('#btnMoveCtrl');
+    if (moveBtn) moveBtn.onclick = () => {
+      if (!G.engine.isPlaying()) { toast('Avvia una partita, poi metti in pausa'); return; }
+      if (!G.engine.isPaused()) G.engine.pause(true);
+      startCtrlEdit();
+    };
     $('#btnQuit').onclick = () => { stopNet(); G.engine.quit(); home(); };
     $('#pauseBtn').onclick = () => requestPauseToggle();
     $('#voteYes').onclick = () => sendMyVote(true);
